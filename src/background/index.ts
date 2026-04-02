@@ -82,6 +82,7 @@ async function getOrTranslate(
   if (cached?.translation) {
     return {
       translation: cached.translation,
+      sentenceTranslation: cached.sentenceTranslation,
       provider: cached.provider,
       cached: true,
     };
@@ -98,6 +99,7 @@ async function getOrTranslate(
     const result = await pending;
     await setCachedTranslation(lemma, contextText, provider, {
       translation: result.translation,
+      sentenceTranslation: result.sentenceTranslation,
       provider: result.provider,
       updatedAt: Date.now(),
     });
@@ -172,6 +174,7 @@ async function handleTranslateWord(message: TranslateWordMessage): Promise<Lexic
       shouldTranslate: true,
       reason: "translate",
       translation: translation.translation,
+      sentenceTranslation: translation.sentenceTranslation,
       translationProvider: translation.provider,
       cached: translation.cached,
     };
@@ -186,6 +189,7 @@ async function handleTranslateWord(message: TranslateWordMessage): Promise<Lexic
       shouldTranslate: true,
       reason: "translate",
       translation: "暂不可用",
+      sentenceTranslation: undefined,
       translationProvider: provider === "llm" ? "deepseek-chat" : "google-web",
       cached: false,
     };

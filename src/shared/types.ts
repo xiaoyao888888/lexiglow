@@ -10,10 +10,12 @@ export interface TranslatorSettings {
   providerModel: string;
   apiKey: string;
   fallbackToGoogle: boolean;
+  llmDisplayMode: "word" | "sentence";
 }
 
 export interface TranslationResult {
   translation: string;
+  sentenceTranslation?: string;
   provider: string;
   cached: boolean;
 }
@@ -27,6 +29,7 @@ export interface LexiconLookupResult {
   shouldTranslate: boolean;
   reason: "ignored" | "known" | "translate" | "invalid";
   translation?: string;
+  sentenceTranslation?: string;
   translationProvider?: string;
   cached?: boolean;
 }
@@ -40,6 +43,7 @@ export interface WordFlags {
 
 export interface CacheEntry {
   translation: string;
+  sentenceTranslation?: string;
   provider: string;
   updatedAt: number;
 }

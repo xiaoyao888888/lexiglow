@@ -5,6 +5,7 @@ export const DEFAULT_TRANSLATOR_SETTINGS: TranslatorSettings = {
   providerModel: "deepseek-chat",
   apiKey: "",
   fallbackToGoogle: true,
+  llmDisplayMode: "word",
 };
 
 function trimContext(contextText: string): string {
@@ -14,6 +15,10 @@ function trimContext(contextText: string): string {
 
 function cleanModelOutput(text: string): string {
   return text.trim().replace(/^["'`\s]+|["'`\s]+$/g, "");
+}
+
+function stripCodeFence(text: string): string {
+  return text.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
 }
 
 function readLlmError(payload: unknown): string {
@@ -70,6 +75,41 @@ export function parseGoogleTranslateResponse(payload: unknown): string {
   return segments.join("").trim();
 }
 
+export function parseLlmTranslationResponse(payload: string): {
+  translation: string;
+  sentenceTranslation?: string;
+} {
+  const content = stripCodeFence(payload);
+  const jsonStart = content.indexOf("{");
+  const jsonEnd = content.lastIndexOf("}");
+
+  if (jsonStart >= 0 && jsonEnd > jsonStart) {
+    try {
+      const parsed = JSON.parse(content.slice(jsonStart, jsonEnd + 1)) as {
+        word?: unknown;
+        sentence?: unknown;
+      };
+      const translation = cleanModelOutput(typeof parsed.word === "string" ? parsed.word : "");
+      const sentenceTranslation = cleanModelOutput(
+        typeof parsed.sentence === "string" ? parsed.sentence : "",
+      );
+
+      if (translation) {
+        return {
+          translation,
+          sentenceTranslation: sentenceTranslation || undefined,
+        };
+      }
+    } catch {
+      // Fall back to plain-text parsing below.
+    }
+  }
+
+  return {
+    translation: cleanModelOutput(content),
+  };
+}
+
 export async function translateWithLlm({
   surface,
   contextText,
@@ -85,15 +125,17 @@ export async function translateWithLlm({
 
   const endpoint = `${settings.providerBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const sentence = trimContext(contextText || surface);
+  const needsSentence = settings.llmDisplayMode === "sentence";
   const body = {
     model: settings.providerModel,
     temperature: 0,
-    max_tokens: 24,
+    max_tokens: needsSentence ? 96 : 40,
     messages: [
       {
         role: "system",
-        content:
-          "Translate the target English word into concise Chinese based on the sentence context. Return only the Chinese translation, no explanation.",
+        content: needsSentence
+          ? 'Translate the target English word based on the sentence context. Return strict JSON only: {"word":"<concise Chinese meaning of the word>","sentence":"<full Chinese translation of the sentence>"}. No markdown, no explanation.'
+          : 'Translate the target English word into concise Chinese based on the sentence context. Return strict JSON only: {"word":"<concise Chinese meaning>"}',
       },
       {
         role: "user",
@@ -128,14 +170,16 @@ export async function translateWithLlm({
     throw new Error(message || `LLM request failed: ${response.status}`);
   }
 
-  const content = cleanModelOutput(payload?.choices?.[0]?.message?.content ?? "");
+  const content = payload?.choices?.[0]?.message?.content ?? "";
+  const parsed = parseLlmTranslationResponse(content);
 
-  if (!content) {
+  if (!parsed.translation) {
     throw new TranslatorFallbackError("LLM translation response was empty.");
   }
 
   return {
-    translation: content,
+    translation: parsed.translation,
+    sentenceTranslation: parsed.sentenceTranslation,
     provider: "deepseek-chat",
     cached: false,
   };
@@ -180,6 +224,7 @@ export function sanitizeTranslatorSettings(
     providerModel: input?.providerModel?.trim() || DEFAULT_TRANSLATOR_SETTINGS.providerModel,
     apiKey: input?.apiKey?.trim() ?? "",
     fallbackToGoogle: input?.fallbackToGoogle ?? true,
+    llmDisplayMode: input?.llmDisplayMode === "sentence" ? "sentence" : "word",
   };
 }
 

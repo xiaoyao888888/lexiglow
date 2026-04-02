@@ -39,13 +39,26 @@ const TOOLTIP_STYLE = `
     color: #10213a;
   }
   .wordwise-translation {
-    font-size: 14px;
-    line-height: 1.5;
-    color: #1f2937;
     margin-bottom: 8px;
     display: none;
   }
   .wordwise-translation[data-visible="true"] {
+    display: block;
+  }
+  .wordwise-primary-translation {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #1f2937;
+    font-weight: 700;
+  }
+  .wordwise-secondary-translation {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #4b5563;
+    margin-top: 6px;
+    display: none;
+  }
+  .wordwise-secondary-translation[data-visible="true"] {
     display: block;
   }
   .wordwise-hint {
@@ -228,10 +241,6 @@ function createTooltipRoot() {
   const actionsEl = document.createElement("div");
   actionsEl.className = "wordwise-actions";
 
-  const googleButton = document.createElement("button");
-  googleButton.className = "wordwise-button wordwise-button--secondary";
-  googleButton.textContent = "Google 翻译";
-
   const llmButton = document.createElement("button");
   llmButton.className = "wordwise-button wordwise-button--secondary";
   llmButton.textContent = "LLM 翻译";
@@ -250,7 +259,15 @@ function createTooltipRoot() {
   button.className = "wordwise-button";
   button.textContent = "已掌握";
 
-  actionsEl.append(googleButton, llmButton, ignoreButton, button);
+  const primaryTranslationEl = document.createElement("div");
+  primaryTranslationEl.className = "wordwise-primary-translation";
+
+  const secondaryTranslationEl = document.createElement("div");
+  secondaryTranslationEl.className = "wordwise-secondary-translation";
+  secondaryTranslationEl.dataset.visible = "false";
+
+  translationEl.append(primaryTranslationEl, secondaryTranslationEl);
+  actionsEl.append(llmButton, ignoreButton, button);
   metaEl.append(rankEl);
   card.append(surfaceEl, hintEl, translationEl, actionsEl, metaEl);
   shadow.append(style, card);
@@ -262,9 +279,10 @@ function createTooltipRoot() {
     surfaceEl,
     hintEl,
     translationEl,
+    primaryTranslationEl,
+    secondaryTranslationEl,
     rankEl,
     button,
-    googleButton,
     llmButton,
     ignoreButton,
   };
@@ -527,11 +545,14 @@ function isPointerInTooltipCorridor(clientX: number, clientY: number): boolean {
 
 function renderTooltip(result: LexiconLookupResult, rect: DOMRect) {
   tooltip.surfaceEl.textContent = result.surface;
-  tooltip.translationEl.textContent = result.translation ?? "";
+  tooltip.primaryTranslationEl.textContent = result.translation ?? "";
+  tooltip.secondaryTranslationEl.textContent = result.sentenceTranslation ?? "";
+  tooltip.secondaryTranslationEl.dataset.visible = result.sentenceTranslation ? "true" : "false";
   tooltip.translationEl.dataset.visible = result.translation ? "true" : "false";
   tooltip.hintEl.dataset.visible = result.translation ? "false" : "true";
   if (!result.translation) {
     tooltip.hintEl.textContent = "默认使用 Google 翻译，不满意可切换到 LLM。";
+    tooltip.secondaryTranslationEl.dataset.visible = "false";
   }
   tooltip.rankEl.textContent = rankLabel(result);
   tooltip.host.style.display = "block";
@@ -683,6 +704,9 @@ async function requestTranslation(provider: TranslationProviderChoice) {
   const translationRequestId = activeTranslationRequestId;
 
   tooltip.translationEl.dataset.visible = "false";
+  tooltip.primaryTranslationEl.textContent = "";
+  tooltip.secondaryTranslationEl.textContent = "";
+  tooltip.secondaryTranslationEl.dataset.visible = "false";
   tooltip.hintEl.dataset.visible = "true";
   tooltip.hintEl.textContent = provider === "llm" ? "LLM 翻译中..." : "Google 翻译中...";
 
@@ -856,10 +880,6 @@ tooltip.button.addEventListener("click", async () => {
     hideTooltip();
     await refreshHighlightsNow();
   }
-});
-
-tooltip.googleButton.addEventListener("click", async () => {
-  await requestTranslation("google");
 });
 
 tooltip.llmButton.addEventListener("click", async () => {

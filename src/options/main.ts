@@ -71,11 +71,15 @@ app.innerHTML = `
     </section>
     <section class="panel">
       <h2>LLM 翻译设置</h2>
-      <p class="muted">优先使用基于句子上下文的 LLM 翻译；当额度不足、限流或未配置时，自动回退到 Google。API Key 只保存在当前浏览器本地，不会进入 GitHub 仓库。</p>
+      <p class="muted">页面默认先显示 Google 单词翻译；当你手动点 LLM 时，会结合句子语境给出更好的结果。你可以选择只显示单词释义，或额外显示整句翻译。API Key 只保存在当前浏览器本地，不会进入 GitHub 仓库。</p>
       <div class="rank-controls">
         <input id="providerBaseUrl" type="text" placeholder="Base URL" />
         <input id="providerModel" type="text" placeholder="Model" />
         <input id="providerApiKey" type="password" placeholder="API Key（仅本地保存）" />
+        <select id="llmDisplayMode">
+          <option value="word">只显示单词翻译</option>
+          <option value="sentence">显示单词翻译 + 整句翻译</option>
+        </select>
         <label class="muted"><input id="fallbackToGoogle" type="checkbox" checked /> 调用失败时自动回退 Google</label>
         <div class="word-actions">
           <button class="primary" id="saveTranslatorButton">保存翻译设置</button>
@@ -112,6 +116,7 @@ const searchResults = document.querySelector<HTMLElement>("#searchResults")!;
 const providerBaseUrl = document.querySelector<HTMLInputElement>("#providerBaseUrl")!;
 const providerModel = document.querySelector<HTMLInputElement>("#providerModel")!;
 const providerApiKey = document.querySelector<HTMLInputElement>("#providerApiKey")!;
+const llmDisplayMode = document.querySelector<HTMLSelectElement>("#llmDisplayMode")!;
 const fallbackToGoogle = document.querySelector<HTMLInputElement>("#fallbackToGoogle")!;
 const saveTranslatorButton = document.querySelector<HTMLButtonElement>("#saveTranslatorButton")!;
 const masteredList = document.querySelector<HTMLElement>("#masteredList")!;
@@ -289,6 +294,7 @@ function renderAll() {
   providerBaseUrl.value = translatorSettings.providerBaseUrl;
   providerModel.value = translatorSettings.providerModel;
   providerApiKey.value = translatorSettings.apiKey;
+  llmDisplayMode.value = translatorSettings.llmDisplayMode;
   fallbackToGoogle.checked = translatorSettings.fallbackToGoogle;
   renderSearch();
   renderMasteredList();
@@ -389,6 +395,7 @@ saveTranslatorButton.addEventListener("click", async () => {
     providerBaseUrl: providerBaseUrl.value,
     providerModel: providerModel.value,
     apiKey: providerApiKey.value,
+    llmDisplayMode: llmDisplayMode.value === "sentence" ? "sentence" : "word",
     fallbackToGoogle: fallbackToGoogle.checked,
   });
 });
