@@ -1,5 +1,7 @@
 import type {
   LexiconLookupResult,
+  PronunciationAccent,
+  PronunciationResult,
   SentenceAnalysisResult,
   SelectionTranslationResult,
   TranslatorSettings,
@@ -94,6 +96,21 @@ export interface TranslateSelectionMessage {
   };
 }
 
+export interface SpeakPronunciationMessage {
+  type: "SPEAK_PRONUNCIATION";
+  payload: {
+    text: string;
+    accent: PronunciationAccent;
+  };
+}
+
+export interface LookupPronunciationMessage {
+  type: "LOOKUP_PRONUNCIATION";
+  payload: {
+    surface: string;
+  };
+}
+
 export type RuntimeMessage =
   | LookupWordMessage
   | SetWordMasteredMessage
@@ -106,7 +123,9 @@ export type RuntimeMessage =
   | SaveTranslatorSettingsMessage
   | TranslateWordMessage
   | AnalyzeSelectionMessage
-  | TranslateSelectionMessage;
+  | TranslateSelectionMessage
+  | SpeakPronunciationMessage
+  | LookupPronunciationMessage;
 
 export interface LookupWordResponse {
   ok: boolean;
@@ -135,5 +154,16 @@ export interface SentenceAnalysisResponse {
 export interface SelectionTranslationResponse {
   ok: boolean;
   result?: SelectionTranslationResult;
+  error?: string;
+}
+
+export interface PronunciationResponse {
+  ok: boolean;
+  error?: string;
+}
+
+export interface PronunciationLookupResponse {
+  ok: boolean;
+  result?: PronunciationResult;
   error?: string;
 }

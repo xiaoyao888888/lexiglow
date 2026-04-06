@@ -3,7 +3,10 @@ import type {
   AnalyzeSelectionMessage,
   GetSettingsMessage,
   GetTranslatorSettingsMessage,
+  LookupPronunciationMessage,
   LookupWordMessage,
+  PronunciationLookupResponse,
+  PronunciationResponse,
   RemoveWordIgnoredMessage,
   RuntimeMessage,
   SaveTranslatorSettingsMessage,
@@ -16,6 +19,11 @@ import type {
   UpdateBaseRankMessage,
 } from "../shared/messages";
 import {
+  extractPronunciation,
+  hasEnglishVoice,
+  selectVoiceForAccent,
+} from "../shared/pronunciation";
+import {
   removeWordIgnored,
   resolveWordFlags,
   setWordIgnored,
@@ -26,12 +34,14 @@ import {
 import {
   getCachedSelectionTranslation,
   getCachedTranslation,
+  getCachedPronunciation,
   getSettings,
   getTranslatorSettings,
   saveSettings,
   saveTranslatorSettings,
   setCachedSelectionTranslation,
   setCachedTranslation,
+  setCachedPronunciation,
 } from "../shared/storage";
 import {
   analyzeSentenceWithLlm,
@@ -42,11 +52,14 @@ import {
 import type {
   CacheEntry,
   LexiconLookupResult,
+  PronunciationAccent,
+  PronunciationResult,
   SentenceAnalysisResult,
   TranslationResult,
 } from "../shared/types";
 
 const inFlightTranslations = new Map<string, Promise<TranslationResult>>();
+const inFlightPronunciations = new Map<string, Promise<PronunciationResult>>();
 
 async function translateByChoice({
   provider,
@@ -296,6 +309,152 @@ async function handleTranslateSelection(
   }
 }
 
+async function getOrLookupPronunciation(surface: string): Promise<PronunciationResult> {
+  const normalized = surface.trim().toLowerCase();
+
+  if (!normalized) {
+    return {
+      cached: false,
+    };
+  }
+
+  const cached = await getCachedPronunciation(normalized);
+
+  if (cached) {
+    return {
+      ukPhonetic: cached.ukPhonetic,
+      usPhonetic: cached.usPhonetic,
+      ukAudioUrl: cached.ukAudioUrl,
+      usAudioUrl: cached.usAudioUrl,
+      cached: true,
+    };
+  }
+
+  let pending = inFlightPronunciations.get(normalized);
+
+  if (!pending) {
+    pending = (async () => {
+      const response = await fetch(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(normalized)}`,
+      );
+
+      if (!response.ok) {
+        return {
+          cached: false,
+        };
+      }
+
+      const payload = (await response.json().catch(() => null)) as unknown;
+      const firstEntry = Array.isArray(payload) && payload.length > 0 ? payload[0] : null;
+
+      if (!firstEntry || typeof firstEntry !== "object") {
+        return {
+          cached: false,
+        };
+      }
+
+      const result = extractPronunciation(firstEntry as Parameters<typeof extractPronunciation>[0]);
+
+      await setCachedPronunciation(normalized, {
+        ukPhonetic: result.ukPhonetic,
+        usPhonetic: result.usPhonetic,
+        ukAudioUrl: result.ukAudioUrl,
+        usAudioUrl: result.usAudioUrl,
+        updatedAt: Date.now(),
+      });
+
+      return {
+        ...result,
+        cached: false,
+      };
+    })();
+
+    inFlightPronunciations.set(normalized, pending);
+  }
+
+  try {
+    return await pending;
+  } finally {
+    inFlightPronunciations.delete(normalized);
+  }
+}
+
+async function handleLookupPronunciation(
+  message: LookupPronunciationMessage,
+): Promise<PronunciationLookupResponse["result"]> {
+  const surface = resolveLookupLemma(message.payload.surface) || message.payload.surface.trim();
+
+  return getOrLookupPronunciation(surface);
+}
+
+async function handleSpeakPronunciation(
+  message: Extract<RuntimeMessage, { type: "SPEAK_PRONUNCIATION" }>,
+): Promise<PronunciationResponse> {
+  const text = message.payload.text.trim();
+  const accent = message.payload.accent as PronunciationAccent;
+
+  if (!text) {
+    return { ok: false, error: "没有可发音的内容。" };
+  }
+
+  const voices = await new Promise<chrome.tts.TtsVoice[]>((resolve) => {
+    chrome.tts.getVoices((items) => resolve(items ?? []));
+  });
+
+  const selectedVoice = selectVoiceForAccent(voices, accent);
+
+  if (!selectedVoice) {
+    if (hasEnglishVoice(voices)) {
+      return {
+        ok: false,
+        error: accent === "en-US"
+          ? "当前设备没有可用的美式英语语音，已避免使用不匹配口音。"
+          : "当前设备没有可用的英式英语语音，已避免使用不匹配口音。",
+      };
+    }
+
+    return { ok: false, error: "当前设备没有可用英语语音。" };
+  }
+
+  chrome.tts.stop();
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    chrome.tts.speak(text, {
+      lang: accent,
+      voiceName: selectedVoice.voiceName,
+      rate: 0.92,
+      pitch: 1,
+      volume: 1,
+      enqueue: false,
+      onEvent(event) {
+        if (settled) {
+          return;
+        }
+
+        if (event.type === "error") {
+          settled = true;
+          reject(new Error(event.errorMessage || "发音播放失败。"));
+          return;
+        }
+
+        if (
+          event.type === "start" ||
+          event.type === "end" ||
+          event.type === "interrupted" ||
+          event.type === "cancelled"
+        ) {
+          settled = true;
+          resolve();
+        }
+      },
+    });
+  });
+
+  return { ok: true };
+}
+
 async function handleSetMastered(message: SetWordMasteredMessage) {
   const settings = await getSettings();
   const next = setWordMastered(settings, message.payload.lemma);
@@ -361,6 +520,12 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResp
         break;
       case "TRANSLATE_SELECTION":
         sendResponse({ ok: true, result: await handleTranslateSelection(message) });
+        break;
+      case "LOOKUP_PRONUNCIATION":
+        sendResponse({ ok: true, result: await handleLookupPronunciation(message) });
+        break;
+      case "SPEAK_PRONUNCIATION":
+        sendResponse(await handleSpeakPronunciation(message));
         break;
       case "SET_WORD_MASTERED":
         sendResponse(await handleSetMastered(message));

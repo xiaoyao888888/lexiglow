@@ -1,6 +1,8 @@
 import { lookupRank, resolveLookupLemma } from "../shared/lexicon";
 import type {
   LookupWordResponse,
+  PronunciationLookupResponse,
+  PronunciationResponse,
   RuntimeMessage,
   SentenceAnalysisResponse,
   SelectionTranslationResponse,
@@ -12,6 +14,8 @@ import { getSettings } from "../shared/storage";
 import { isEnglishSelectionText, isSingleEnglishWord, normalizeSelectionText } from "../shared/word";
 import type {
   LexiconLookupResult,
+  PronunciationAccent,
+  PronunciationResult,
   SentenceAnalysisResult,
   UserSettings,
 } from "../shared/types";
@@ -28,7 +32,7 @@ const TOOLTIP_STYLE = `
   .wordwise-card {
     position: fixed;
     min-width: 220px;
-    max-width: 320px;
+    max-width: 360px;
     padding: 12px 14px;
     border-radius: 14px;
     border: 1px solid rgba(15, 23, 42, 0.08);
@@ -51,6 +55,73 @@ const TOOLTIP_STYLE = `
     font-weight: 700;
     margin-bottom: 4px;
     color: #10213a;
+  }
+  .wordwise-pronunciation {
+    display: none;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin: 8px 0 10px;
+  }
+  .wordwise-pronunciation[data-visible="true"] {
+    display: grid;
+  }
+  .wordwise-pronunciation-chip {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.05);
+    color: #334155;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .wordwise-pronunciation-text {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    color: #475569;
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+  .wordwise-pronunciation-label {
+    font-weight: 700;
+    color: #64748b;
+    flex: 0 0 auto;
+  }
+  .wordwise-pronunciation-ipa {
+    font-weight: 600;
+    color: #7c6f45;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.25;
+  }
+  .wordwise-pronunciation-action {
+    border: 0;
+    background: transparent;
+    color: #ea580c;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    flex: 0 0 auto;
+  }
+  .wordwise-pronunciation-action:hover {
+    color: #c2410c;
+  }
+  .wordwise-pronunciation-action[data-playing="true"] {
+    color: #dc2626;
+  }
+  .wordwise-pronunciation-action svg {
+    width: 14px;
+    height: 14px;
+    display: block;
   }
   .wordwise-translation {
     margin-bottom: 8px;
@@ -277,6 +348,14 @@ const HIGHLIGHT_STYLE = `
     background: rgba(250, 204, 21, 0.28);
     font-weight: 600;
   }
+`;
+
+const SPEAKER_ICON = `
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M7 3.2 4.6 5.2H2.9a.9.9 0 0 0-.9.9v3.8c0 .5.4.9.9.9h1.7L7 12.8a.55.55 0 0 0 .9-.43V3.63A.55.55 0 0 0 7 3.2Z" fill="currentColor"/>
+    <path d="M10.3 5.4a3.2 3.2 0 0 1 0 5.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M11.9 4a5.1 5.1 0 0 1 0 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+  </svg>
 `;
 
 
@@ -582,6 +661,10 @@ function createTooltipRoot() {
   const surfaceEl = document.createElement("div");
   surfaceEl.className = "wordwise-surface";
 
+  const pronunciationEl = document.createElement("div");
+  pronunciationEl.className = "wordwise-pronunciation";
+  pronunciationEl.dataset.visible = "false";
+
   const translationEl = document.createElement("div");
   translationEl.className = "wordwise-translation";
   translationEl.dataset.visible = "false";
@@ -598,6 +681,43 @@ function createTooltipRoot() {
   const llmButton = document.createElement("button");
   llmButton.className = "wordwise-button wordwise-button--secondary";
   llmButton.textContent = "LLM 翻译";
+
+  const britishChip = document.createElement("div");
+  britishChip.className = "wordwise-pronunciation-chip";
+  const britishText = document.createElement("span");
+  britishText.className = "wordwise-pronunciation-text";
+  const britishLabel = document.createElement("span");
+  britishLabel.className = "wordwise-pronunciation-label";
+  britishLabel.textContent = "英音";
+  const britishPhoneticEl = document.createElement("span");
+  britishPhoneticEl.className = "wordwise-pronunciation-ipa";
+  britishPhoneticEl.textContent = "/.../";
+  const britishButton = document.createElement("button");
+  britishButton.className = "wordwise-pronunciation-action";
+  britishButton.type = "button";
+  britishButton.setAttribute("aria-label", "播放英式发音");
+  britishButton.innerHTML = SPEAKER_ICON;
+  britishText.append(britishLabel, britishPhoneticEl);
+  britishChip.append(britishText, britishButton);
+
+  const americanChip = document.createElement("div");
+  americanChip.className = "wordwise-pronunciation-chip";
+  const americanText = document.createElement("span");
+  americanText.className = "wordwise-pronunciation-text";
+  const americanLabel = document.createElement("span");
+  americanLabel.className = "wordwise-pronunciation-label";
+  americanLabel.textContent = "美音";
+  const americanPhoneticEl = document.createElement("span");
+  americanPhoneticEl.className = "wordwise-pronunciation-ipa";
+  americanPhoneticEl.textContent = "/.../";
+  const americanButton = document.createElement("button");
+  americanButton.className = "wordwise-pronunciation-action";
+  americanButton.type = "button";
+  americanButton.setAttribute("aria-label", "播放美式发音");
+  americanButton.innerHTML = SPEAKER_ICON;
+  americanText.append(americanLabel, americanPhoneticEl);
+  americanChip.append(americanText, americanButton);
+  pronunciationEl.append(britishChip, americanChip);
 
   const selectionAnalysisButton = document.createElement("button");
   selectionAnalysisButton.className = "wordwise-button wordwise-button--secondary";
@@ -701,7 +821,7 @@ function createTooltipRoot() {
   translationEl.append(primaryTranslationEl, secondaryTranslationEl);
   actionsEl.append(llmButton, selectionAnalysisButton, ignoreButton, button);
   metaEl.append(rankEl);
-  wordView.append(surfaceEl, hintEl, translationEl, actionsEl, metaEl);
+  wordView.append(surfaceEl, pronunciationEl, hintEl, translationEl, actionsEl, metaEl);
   analysisHeader.append(analysisTitleEl, analysisTriggerButton);
   analysisView.append(
     analysisHeader,
@@ -722,6 +842,9 @@ function createTooltipRoot() {
     wordView,
     analysisView,
     surfaceEl,
+    pronunciationEl,
+    britishPhoneticEl,
+    americanPhoneticEl,
     hintEl,
     translationEl,
     primaryTranslationEl,
@@ -730,6 +853,8 @@ function createTooltipRoot() {
     metaEl,
     button,
     llmButton,
+    britishButton,
+    americanButton,
     selectionAnalysisButton,
     ignoreButton,
     analysisTitleEl,
@@ -955,8 +1080,24 @@ let selectionRequestId = 0;
 let analysisPanelOpen = false;
 let activeSentenceAnalysisRequestId = 0;
 let suppressSelectionTriggerUntil = 0;
+let activeWordTooltipSource: "hover-word" | "review-word" | "selection-translate" = "hover-word";
+let activePronunciationSurface = "";
+let activePronunciationRequestId = 0;
+let activePronunciationResult: PronunciationResult | null = null;
+let activePronunciationAudio: HTMLAudioElement | null = null;
+
+function stopActivePronunciationAudio() {
+  if (!activePronunciationAudio) {
+    return;
+  }
+
+  activePronunciationAudio.pause();
+  activePronunciationAudio.currentTime = 0;
+  activePronunciationAudio = null;
+}
 
 function hideTooltip() {
+  stopActivePronunciationAudio();
   tooltip.host.style.display = "none";
   tooltip.card.dataset.mode = "word";
   tooltip.wordView.dataset.visible = "true";
@@ -967,6 +1108,9 @@ function hideTooltip() {
   activeSelectionTooltipContext = null;
   activeTranslationRequestId += 1;
   activeSelectionTranslationRequestId += 1;
+  activePronunciationRequestId += 1;
+  activePronunciationSurface = "";
+  activePronunciationResult = null;
   if (!analysisPanelOpen) {
     activeSelectionContext = null;
   }
@@ -1068,7 +1212,58 @@ function setWordTooltipControls(mode: "word" | "selection") {
   tooltip.ignoreButton.style.display = isSelection ? "none" : "inline-flex";
   tooltip.metaEl.style.display = isSelection ? "none" : "flex";
   tooltip.llmButton.style.display = "inline-flex";
+  tooltip.pronunciationEl.dataset.visible = isSelection ? "false" : "true";
+  tooltip.britishButton.dataset.playing = "false";
+  tooltip.americanButton.dataset.playing = "false";
   tooltip.selectionAnalysisButton.style.display = isSelection ? "inline-flex" : "none";
+}
+
+function resetPronunciationDisplay(surface: string) {
+  activePronunciationSurface = surface;
+  activePronunciationResult = null;
+  tooltip.britishPhoneticEl.textContent = "/.../";
+  tooltip.americanPhoneticEl.textContent = "/.../";
+}
+
+async function loadPronunciation(surface: string) {
+  activePronunciationRequestId += 1;
+  const requestId = activePronunciationRequestId;
+  const normalizedSurface = surface.trim();
+
+  if (!normalizedSurface) {
+    return;
+  }
+
+  let response: PronunciationLookupResponse;
+
+  try {
+    response = await runtimeSend<PronunciationLookupResponse>({
+      type: "LOOKUP_PRONUNCIATION",
+      payload: {
+        surface: normalizedSurface,
+      },
+    });
+  } catch (error) {
+    if (isExtensionContextInvalidated(error)) {
+      hideTooltip();
+      return;
+    }
+
+    throw error;
+  }
+
+  if (
+    !response.ok ||
+    requestId !== activePronunciationRequestId ||
+    activeWordTooltipSource === "selection-translate" ||
+    activePronunciationSurface !== normalizedSurface
+  ) {
+    return;
+  }
+
+  activePronunciationResult = response.result ?? null;
+  tooltip.britishPhoneticEl.textContent = response.result?.ukPhonetic ?? "/.../";
+  tooltip.americanPhoneticEl.textContent = response.result?.usPhonetic ?? "/.../";
 }
 
 function renderSelectionTooltip(
@@ -1098,6 +1293,9 @@ function renderSelectionTooltip(
   activeAnchorRect = context.rect;
   activeSelectionTooltipContext = context;
   activeSelectionContext = context;
+  activeWordTooltipSource = "selection-translate";
+  activePronunciationRequestId += 1;
+  activePronunciationSurface = "";
   activeContext = null;
   activeResult = null;
   analysisPanelOpen = false;
@@ -1192,8 +1390,13 @@ function renderTooltip(result: LexiconLookupResult, rect: DOMRect) {
   tooltip.host.style.display = "block";
   activeAnchorRect = rect;
   activeSelectionTooltipContext = null;
+  activeWordTooltipSource = activeContext?.forceTranslate ? "review-word" : "hover-word";
   positionTooltip(rect);
   activeResult = result;
+  if (activePronunciationSurface !== result.surface) {
+    resetPronunciationDisplay(result.surface);
+    void loadPronunciation(result.surface);
+  }
 }
 
 function renderSentenceAnalysisPanel(
@@ -1485,6 +1688,108 @@ async function requestTranslationForContext(
   await requestTranslation(provider);
 }
 
+function showPronunciationFeedback(button: HTMLButtonElement) {
+  button.dataset.playing = "true";
+  window.setTimeout(() => {
+    button.dataset.playing = "false";
+  }, 1200);
+}
+
+async function playPronunciationAudio(
+  audioUrl: string,
+  button: HTMLButtonElement,
+): Promise<boolean> {
+  try {
+    stopActivePronunciationAudio();
+    const audio = new Audio(audioUrl);
+    activePronunciationAudio = audio;
+    audio.preload = "auto";
+    button.dataset.playing = "true";
+
+    await audio.play();
+
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        audio.removeEventListener("ended", handleEnded);
+        audio.removeEventListener("error", handleError);
+        audio.removeEventListener("abort", handleError);
+      };
+      const handleEnded = () => {
+        cleanup();
+        resolve();
+      };
+      const handleError = () => {
+        cleanup();
+        reject(new Error("audio playback failed"));
+      };
+
+      audio.addEventListener("ended", handleEnded, { once: true });
+      audio.addEventListener("error", handleError, { once: true });
+      audio.addEventListener("abort", handleError, { once: true });
+    });
+
+    if (activePronunciationAudio === audio) {
+      activePronunciationAudio = null;
+    }
+    button.dataset.playing = "false";
+    return true;
+  } catch {
+    button.dataset.playing = "false";
+    if (activePronunciationAudio) {
+      activePronunciationAudio = null;
+    }
+    return false;
+  }
+}
+
+async function speakPronunciation(accent: PronunciationAccent) {
+  if (!activeResult?.surface || activeWordTooltipSource === "selection-translate") {
+    return;
+  }
+
+  const button = accent === "en-GB" ? tooltip.britishButton : tooltip.americanButton;
+  const audioUrl = accent === "en-GB"
+    ? activePronunciationResult?.ukAudioUrl
+    : activePronunciationResult?.usAudioUrl;
+
+  let response: PronunciationResponse;
+
+  showPronunciationFeedback(button);
+
+  try {
+    response = await runtimeSend<PronunciationResponse>({
+      type: "SPEAK_PRONUNCIATION",
+      payload: {
+        text: activeResult.surface,
+        accent,
+      },
+    });
+  } catch (error) {
+    if (isExtensionContextInvalidated(error)) {
+      hideTooltip();
+      return;
+    }
+
+    throw error;
+  }
+
+  if (!response.ok) {
+    button.dataset.playing = "false";
+
+    if (audioUrl) {
+      const played = await playPronunciationAudio(audioUrl, button);
+
+      if (played) {
+        return;
+      }
+    }
+
+    tooltip.hintEl.dataset.visible = "true";
+    tooltip.hintEl.dataset.loading = "false";
+    tooltip.hintEl.textContent = response.error ?? "发音暂不可用。";
+  }
+}
+
 async function requestSentenceAnalysis(context: SentenceSelectionContext) {
   activeSentenceAnalysisRequestId += 1;
   const requestId = activeSentenceAnalysisRequestId;
@@ -1718,6 +2023,14 @@ tooltip.llmButton.addEventListener("click", async () => {
   }
 
   await requestTranslation("llm");
+});
+
+tooltip.britishButton.addEventListener("click", async () => {
+  await speakPronunciation("en-GB");
+});
+
+tooltip.americanButton.addEventListener("click", async () => {
+  await speakPronunciation("en-US");
 });
 
 tooltip.ignoreButton.addEventListener("click", async () => {

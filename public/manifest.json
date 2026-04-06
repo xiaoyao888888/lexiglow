@@ -3,7 +3,7 @@
   "name": "WordWise Hover Translator",
   "version": "0.1.0",
   "description": "Hover English words on web pages to see Chinese translations for unfamiliar vocabulary.",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "tts"],
   "host_permissions": [
     "https://translate.googleapis.com/*",
     "http://*/*",

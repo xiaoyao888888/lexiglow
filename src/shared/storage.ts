@@ -1,7 +1,12 @@
 import { CACHE_KEY_PREFIX, STORAGE_SETTINGS_KEY, STORAGE_TRANSLATOR_SETTINGS_KEY } from "./constants";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./settings";
 import { DEFAULT_TRANSLATOR_SETTINGS, sanitizeTranslatorSettings } from "./translator";
-import type { CacheEntry, TranslatorSettings, UserSettings } from "./types";
+import type {
+  CacheEntry,
+  PronunciationCacheEntry,
+  TranslatorSettings,
+  UserSettings,
+} from "./types";
 
 export async function getSettings(): Promise<UserSettings> {
   const result = await chrome.storage.sync.get(STORAGE_SETTINGS_KEY);
@@ -68,6 +73,10 @@ function normalizeSelectionCacheKey(text: string): string {
   return text.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function normalizePronunciationCacheKey(surface: string): string {
+  return surface.trim().toLowerCase();
+}
+
 export async function getCachedSelectionTranslation(
   text: string,
   contextText = "",
@@ -88,4 +97,22 @@ export async function setCachedSelectionTranslation(
     provider,
     entry,
   );
+}
+
+export async function getCachedPronunciation(
+  surface: string,
+): Promise<PronunciationCacheEntry | null> {
+  const key = `${CACHE_KEY_PREFIX}pronunciation:${normalizePronunciationCacheKey(surface)}`;
+  const result = await chrome.storage.local.get(key);
+  return (result[key] as PronunciationCacheEntry | undefined) ?? null;
+}
+
+export async function setCachedPronunciation(
+  surface: string,
+  entry: PronunciationCacheEntry,
+): Promise<void> {
+  const key = `${CACHE_KEY_PREFIX}pronunciation:${normalizePronunciationCacheKey(surface)}`;
+  await chrome.storage.local.set({
+    [key]: entry,
+  });
 }

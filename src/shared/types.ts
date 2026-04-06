@@ -28,6 +28,16 @@ export interface SelectionTranslationResult {
   cached: boolean;
 }
 
+export type PronunciationAccent = "en-GB" | "en-US";
+
+export interface PronunciationResult {
+  ukPhonetic?: string;
+  usPhonetic?: string;
+  ukAudioUrl?: string;
+  usAudioUrl?: string;
+  cached: boolean;
+}
+
 export type SentenceHighlightCategory =
   | "subject"
   | "predicate"
@@ -75,5 +85,13 @@ export interface CacheEntry {
   translation: string;
   sentenceTranslation?: string;
   provider: string;
+  updatedAt: number;
+}
+
+export interface PronunciationCacheEntry {
+  ukPhonetic?: string;
+  usPhonetic?: string;
+  ukAudioUrl?: string;
+  usAudioUrl?: string;
   updatedAt: number;
 }
