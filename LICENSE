@@ -1,21 +1,80 @@
-MIT License
+LexiGlow Source-Available License v1
 
 Copyright (c) 2026 xiaoyao
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+本项目采用源码可见许可，不属于 OSI 定义的开源许可证。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+一、你可以做什么
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+在遵守本许可证全部条款的前提下，你可以出于以下非商业目的查看、下载、
+运行、学习、测试、修改本项目代码：
+
+1. 个人学习与研究
+2. 非商业实验
+3. 非商业内部评估
+4. 教学、公益、学术研究
+
+二、你必须做什么
+
+如果你满足以下任一情形，必须显著标注本项目来源：
+
+1. 直接复制、修改、合并、分发本项目的全部或部分代码
+2. 基于本项目的实现思路、目录结构、核心交互、提示词设计、规则系统、
+   数据结构、学习状态模型、翻译流程、长难句分析流程等进行二次开发
+3. 将本项目移植到其他语言、框架、平台或运行环境
+4. 对本项目进行“参考后重写”“换语言重写”“按原逻辑重新实现”等行为，
+   只要该成果实质上基于本项目
+
+上述情况下，你必须在以下至少一个对外可见位置进行显著标注：
+
+1. 项目仓库首页 README
+2. 软件关于页、设置页或产品说明页
+3. 应用商店描述页
+4. 文档首页
+
+标注内容必须清晰可见，且不得弱化、隐藏或删除。推荐使用如下文案：
+
+This project is based on LexiGlow by xiaoyao888888.
+Source: https://github.com/xiaoyao888888/lexiglow
+
+三、你不能做什么
+
+未经作者事先书面授权，你不得将本项目或任何基于本项目的衍生成果用于商业目的，
+包括但不限于：
+
+1. 直接售卖软件、代码、插件、脚本或其副本
+2. 将其集成到收费产品、付费功能、SaaS、企业服务或商业发行版中
+3. 以广告、会员、订阅、代运营、外包交付、培训交付等方式进行商业化使用
+4. 为公司、客户、商业团队或其他盈利组织提供基于本项目的定制开发或部署
+
+四、商业授权
+
+如需商业使用，请先获得作者的明确书面授权。未获得书面授权前，任何商业使用均被禁止。
+
+商业授权联系路径：
+
+- GitHub: https://github.com/xiaoyao888888
+- Repository: https://github.com/xiaoyao888888/lexiglow
+
+五、分发要求
+
+如果你分发本项目或其衍生版本，必须：
+
+1. 保留本许可证全文
+2. 保留原作者版权声明
+3. 保留并显著展示来源标注
+4. 明确说明你是否对原项目进行了修改
+
+六、禁止误导
+
+你不得暗示你的衍生项目由原作者背书、官方发布、官方合作，除非作者另有明确书面同意。
+
+七、独立创作说明
+
+如果某个项目并非基于本项目代码、实现、流程或表达而独立创作，则不受本许可证中的来源标注条款约束。
+但仅仅通过“换一种语言重写”或“调整变量名、文件结构、界面样式”等方式，不当然构成独立创作。
+
+八、免责声明
+
+本项目按“现状”提供，不附带任何明示或暗示担保。作者不对因使用本项目或其衍生版本
+导致的任何损失承担责任。

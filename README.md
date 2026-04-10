@@ -15,7 +15,10 @@
     <img alt="GitHub stars" src="https://img.shields.io/github/stars/xiaoyao888888/lexiglow?style=flat-square" />
   </a>
   <a href="https://github.com/xiaoyao888888/lexiglow/blob/main/LICENSE">
-    <img alt="License" src="https://img.shields.io/github/license/xiaoyao888888/lexiglow?style=flat-square" />
+    <img alt="Source Available" src="https://img.shields.io/badge/license-source--available-cb7a33?style=flat-square" />
+  </a>
+  <a href="https://github.com/xiaoyao888888/lexiglow/blob/main/COMMERCIAL.md">
+    <img alt="Commercial License Required" src="https://img.shields.io/badge/commercial-license%20required-b3261e?style=flat-square" />
   </a>
   <img alt="Chrome Extension" src="https://img.shields.io/badge/platform-Chrome%20Extension-f6c453?style=flat-square" />
   <img alt="TypeScript" src="https://img.shields.io/badge/built%20with-TypeScript-2f74c0?style=flat-square" />
@@ -260,6 +263,21 @@ npm test
 5. 选中一个词组，确认默认先出 Google
 6. 选中一整句，点击 `长难句翻译`
 7. 点击 `已掌握`，确认当前页同词高亮即时消失
+
+## 许可证与商用
+
+本项目当前不是 MIT，也不是传统意义上的宽松开源许可，而是更偏源码可见的许可模式：
+
+- 允许非商业学习、研究、测试、教学使用
+- 禁止未经作者书面授权的商业使用
+- 任何基于本项目的修改、移植、二次开发、换语言重写，只要实质上基于本项目，都必须显著标注来源
+
+详细条款见：
+
+- [LICENSE](./LICENSE)
+- [COMMERCIAL.md](./COMMERCIAL.md)
+
+如果你希望在产品、公司项目、收费服务、商业插件、企业部署或客户交付中使用本项目，请先联系作者获取商业授权。
 
 ## 技术栈
 

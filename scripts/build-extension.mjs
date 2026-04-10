@@ -18,4 +18,5 @@ await esbuild({
   target: "chrome110",
   platform: "browser",
   legalComments: "none",
+  minify: true,
 });
