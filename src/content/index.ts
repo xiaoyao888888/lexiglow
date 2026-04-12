@@ -12,6 +12,8 @@ import type {
 import { DEFAULT_SETTINGS, resolveWordFlags } from "../shared/settings";
 import { getSettings } from "../shared/storage";
 import {
+  createEnglishTokenMatcher,
+  extractWordAtOffset,
   isEnglishSelectionText,
   isSingleEnglishWord,
   normalizeSelectionText,
@@ -604,22 +606,8 @@ interface SelectedTextContext {
   contextText: string;
 }
 
-interface WordAtOffset {
-  surface: string;
-  start: number;
-  end: number;
-}
-
-function isWordCharacter(char: string | undefined): boolean {
-  return Boolean(char && /[A-Za-z']/u.test(char));
-}
-
 function isAlphaNumeric(char: string | undefined): boolean {
   return Boolean(char && /[A-Za-z0-9]/u.test(char));
-}
-
-function isEnglishLikeWord(surface: string): boolean {
-  return /^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(surface);
 }
 
 function isStructuralTechnicalBoundaryCharacter(char: string | undefined): boolean {
@@ -674,47 +662,6 @@ function extractSentenceAroundRange(text: string, start: number, end: number): s
   return sentence;
 }
 
-function extractWordAtOffset(text: string, offset: number): WordAtOffset | null {
-  if (!text) {
-    return null;
-  }
-
-  let cursor = Math.min(Math.max(offset, 0), text.length - 1);
-
-  if (!isWordCharacter(text[cursor])) {
-    if (cursor > 0 && isWordCharacter(text[cursor - 1])) {
-      cursor -= 1;
-    } else if (cursor + 1 < text.length && isWordCharacter(text[cursor + 1])) {
-      cursor += 1;
-    } else {
-      return null;
-    }
-  }
-
-  let start = cursor;
-  let end = cursor + 1;
-
-  while (start > 0 && isWordCharacter(text[start - 1])) {
-    start -= 1;
-  }
-
-  while (end < text.length && isWordCharacter(text[end])) {
-    end += 1;
-  }
-
-  if (isEmbeddedInTechnicalToken(text, start, end)) {
-    return null;
-  }
-
-  const surface = text.slice(start, end);
-
-  if (!isEnglishLikeWord(surface)) {
-    return null;
-  }
-
-  return { surface, start, end };
-}
-
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -734,6 +681,38 @@ function waitForPaint(): Promise<void> {
 
 function normalizeHighlightWord(value: string): string {
   return value.toLowerCase().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
+}
+
+interface HighlightSegment {
+  surface: string;
+  start: number;
+  end: number;
+}
+
+const REVIEWABLE_PREPOSITIONS = new Set([
+  "of", "in", "on", "at", "by", "for", "with", "from", "about", "between", "among",
+  "over", "under", "into", "onto", "through", "across", "around",
+]);
+
+function getHighlightSegments(surface: string, start: number): HighlightSegment[] {
+  if (!surface.includes("-")) {
+    return [{ surface, start, end: start + surface.length }];
+  }
+
+  const segments: HighlightSegment[] = [];
+  const matcher = /[A-Za-z]+(?:'[A-Za-z]+)?/g;
+  let match = matcher.exec(surface);
+
+  while (match) {
+    segments.push({
+      surface: match[0],
+      start: start + match.index,
+      end: start + match.index + match[0].length,
+    });
+    match = matcher.exec(surface);
+  }
+
+  return segments.length ? segments : [{ surface, start, end: start + surface.length }];
 }
 
 function isAnalyzableSelectionText(text: string): boolean {
@@ -786,7 +765,7 @@ interface MatchedSentenceClauseBlock extends SentenceClauseBlock {
 
 function tokenizeSentenceWords(sentence: string): SentenceWordToken[] {
   const tokens: SentenceWordToken[] = [];
-  const regex = /[A-Za-z]+(?:'[A-Za-z]+)?/g;
+  const regex = createEnglishTokenMatcher();
   let match: RegExpExecArray | null = regex.exec(sentence);
   let index = 0;
 
@@ -836,6 +815,90 @@ function matchClauseBlocks(
   }
 
   return matchedBlocks;
+}
+
+function mergeDisplayClauseBlocks(
+  sentence: string,
+  blocks: MatchedSentenceClauseBlock[],
+): MatchedSentenceClauseBlock[] {
+  if (blocks.length < 2) {
+    return blocks;
+  }
+
+  const merged: MatchedSentenceClauseBlock[] = [];
+  let index = 0;
+
+  while (index < blocks.length) {
+    const current = blocks[index];
+    const next = blocks[index + 1];
+    const currentText = current.text.trim().toLowerCase();
+    const currentWords = currentText.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
+
+    if (
+      next &&
+      currentWords.length === 1 &&
+      REVIEWABLE_PREPOSITIONS.has(currentWords[0]) &&
+      /^[\s,;:()]*$/.test(sentence.slice(current.end, next.start))
+    ) {
+      merged.push({
+        ...next,
+        start: current.start,
+        text: sentence.slice(current.start, next.end),
+      });
+      index += 2;
+      continue;
+    }
+
+    merged.push(current);
+    index += 1;
+  }
+
+  return merged;
+}
+
+function splitDisplayClauseBlocks(
+  sentence: string,
+  blocks: MatchedSentenceClauseBlock[],
+): MatchedSentenceClauseBlock[] {
+  const refined: MatchedSentenceClauseBlock[] = [];
+  const branchPattern =
+    /\b(of|in|with|by|through|over|under|for|from|on|at|to)\s+(what|which|who|whom|whose|where|when|how|whether|why)\b/i;
+
+  for (const block of blocks) {
+    const blockText = sentence.slice(block.start, block.end);
+    const match = branchPattern.exec(blockText);
+
+    if (!match || match.index < 0) {
+      refined.push(block);
+      continue;
+    }
+
+    const splitStart = block.start + match.index;
+    const prefixText = sentence.slice(block.start, splitStart).trim();
+    const branchText = sentence.slice(splitStart, block.end).trim();
+    const prefixWords = prefixText.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
+    const branchWords = branchText.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
+
+    if (prefixWords.length < 3 || branchWords.length < 3) {
+      refined.push(block);
+      continue;
+    }
+
+    refined.push({
+      ...block,
+      text: sentence.slice(block.start, splitStart).replace(/\s+$/u, ""),
+      start: block.start,
+      end: splitStart,
+    });
+    refined.push({
+      ...block,
+      text: sentence.slice(splitStart, block.end).replace(/^\s+/u, ""),
+      start: splitStart,
+      end: block.end,
+    });
+  }
+
+  return refined;
 }
 
 function assignFirstMatchingToken(
@@ -960,7 +1023,13 @@ function renderSentenceWithClauseBlocks(
 
   const tokens = tokenizeSentenceWords(sentence);
   const assignments = buildHighlightAssignments(result, sentence);
-  const displayBlocks = matchClauseBlocks(sentence, result.clauseBlocks);
+  const displayBlocks = splitDisplayClauseBlocks(
+    sentence,
+    mergeDisplayClauseBlocks(
+      sentence,
+      matchClauseBlocks(sentence, result.clauseBlocks),
+    ),
+  );
 
   let cursor = 0;
   let matchedCount = 0;
@@ -1297,7 +1366,7 @@ function getCaretRangeFromPoint(x: number, y: number): { node: Text; offset: num
   return null;
 }
 
-function getSelectedWordContext(): HoverContext | null {
+function getSelectedWordContext(pointer?: { clientX: number; clientY: number }): HoverContext | null {
   const selection = window.getSelection();
 
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
@@ -1305,13 +1374,28 @@ function getSelectedWordContext(): HoverContext | null {
   }
 
   const rawSurface = selection.toString();
-  const surface = normalizeSingleEnglishWord(rawSurface);
+  let surface = normalizeSingleEnglishWord(rawSurface);
+  let range = selection.getRangeAt(0).cloneRange();
+
+  if (pointer) {
+    const caret = getCaretRangeFromPoint(pointer.clientX, pointer.clientY);
+
+    if (caret) {
+      const text = caret.node.textContent ?? "";
+      const pointedWord = extractWordAtOffset(text, caret.offset);
+
+      if (pointedWord) {
+        surface = pointedWord.surface;
+        range = document.createRange();
+        range.setStart(caret.node, pointedWord.start);
+        range.setEnd(caret.node, pointedWord.end);
+      }
+    }
+  }
 
   if (!surface || !isSingleEnglishWord(surface)) {
     return null;
   }
-
-  const range = selection.getRangeAt(0).cloneRange();
 
   if (
     rawSurface.trim() !== surface &&
@@ -1917,7 +2001,7 @@ async function refreshHighlights() {
     },
   });
 
-  const matcher = /[A-Za-z]+(?:'[A-Za-z]+)?/g;
+  const matcher = createEnglishTokenMatcher();
   let pendingCount = 0;
   let currentNode = walker.nextNode();
 
@@ -1937,19 +2021,49 @@ async function refreshHighlights() {
         continue;
       }
 
-      const lemma = resolveLookupLemma(surface);
-      const rank = lemma ? lookupRank(lemma) : null;
-      const flags = resolveWordFlags(lemma, rank, settings, surface);
+      const segments = getHighlightSegments(surface, start);
+      let highlightedSegment = false;
 
-      if (flags.shouldTranslate) {
+      for (const segment of segments) {
+        if (pendingCount >= HIGHLIGHT_SCAN_LIMIT) {
+          break;
+        }
+
+        const lemma = resolveLookupLemma(segment.surface);
+        const rank = lemma ? lookupRank(lemma) : null;
+        const flags = resolveWordFlags(lemma, rank, settings, segment.surface);
+
+        if (!flags.shouldTranslate) {
+          continue;
+        }
+
         const range = document.createRange();
-        range.setStart(textNode, start);
-        range.setEnd(textNode, end);
+        range.setStart(textNode, segment.start);
+        range.setEnd(textNode, segment.end);
         const rect = range.getBoundingClientRect();
 
         if (isVisibleRect(rect)) {
           highlight.add(range);
           pendingCount += 1;
+          highlightedSegment = true;
+        }
+      }
+
+      if (!highlightedSegment) {
+        const lemma = resolveLookupLemma(surface);
+        const rank = lemma ? lookupRank(lemma) : null;
+        const flags = resolveWordFlags(lemma, rank, settings, surface);
+
+        if (flags.shouldTranslate) {
+          const range = document.createRange();
+          range.setStart(textNode, start);
+          range.setEnd(textNode, end);
+          const rect = range.getBoundingClientRect();
+
+          if (isVisibleRect(rect)) {
+            highlight.add(range);
+            pendingCount += 1;
+          }
         }
       }
 
@@ -2651,9 +2765,12 @@ document.addEventListener("keyup", (event) => {
   }
 });
 
-document.addEventListener("dblclick", () => {
+document.addEventListener("dblclick", (event) => {
   window.setTimeout(() => {
-    const context = getSelectedWordContext();
+    const context = getSelectedWordContext({
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
 
     if (!context) {
       return;

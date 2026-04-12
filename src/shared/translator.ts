@@ -270,25 +270,105 @@ function sanitizeClauseBlocks(input: unknown): SentenceClauseBlock[] {
     .filter((item): item is SentenceClauseBlock => Boolean(item));
 }
 
-export function parseSentenceAnalysisResponse(payload: string): Omit<
-  SentenceAnalysisResult,
-  "provider" | "cached"
-> {
-  const content = stripCodeFence(payload);
-  const jsonStart = content.indexOf("{");
-  const jsonEnd = content.lastIndexOf("}");
+function extractJsonObjectText(content: string): string {
+  const stripped = stripCodeFence(content);
+  const jsonStart = stripped.indexOf("{");
+  const jsonEnd = stripped.lastIndexOf("}");
 
   if (jsonStart < 0 || jsonEnd <= jsonStart) {
     throw new Error("Sentence analysis response was not valid JSON.");
   }
 
-  const parsed = JSON.parse(content.slice(jsonStart, jsonEnd + 1)) as {
+  return stripped.slice(jsonStart, jsonEnd + 1);
+}
+
+function repairLooseJson(jsonText: string): string {
+  const withoutTrailingCommas = jsonText.replace(/,\s*([}\]])/g, "$1");
+  let output = "";
+  let inString = false;
+  let escaping = false;
+  let lastSignificantChar = "";
+
+  const canEndJsonValue = (char: string) =>
+    char === '"' || char === "}" || char === "]" || /[0-9A-Za-z]/.test(char);
+  const canStartJsonValue = (char: string) =>
+    char === '"' || char === "{" || char === "[" || char === "-" || /[0-9tfn]/i.test(char);
+
+  for (let index = 0; index < withoutTrailingCommas.length; index += 1) {
+    const char = withoutTrailingCommas[index];
+
+    if (inString) {
+      output += char;
+
+      if (escaping) {
+        escaping = false;
+      } else if (char === "\\") {
+        escaping = true;
+      } else if (char === '"') {
+        inString = false;
+        lastSignificantChar = '"';
+      }
+
+      continue;
+    }
+
+    if (char === '"') {
+      if (
+        lastSignificantChar &&
+        canEndJsonValue(lastSignificantChar) &&
+        canStartJsonValue(char) &&
+        !["{", "[", ":", ","].includes(lastSignificantChar)
+      ) {
+        output += ",";
+      }
+
+      output += char;
+      inString = true;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      output += char;
+      continue;
+    }
+
+    if (
+      lastSignificantChar &&
+      canEndJsonValue(lastSignificantChar) &&
+      canStartJsonValue(char) &&
+      !["{", "[", ":", ","].includes(lastSignificantChar)
+    ) {
+      output += ",";
+    }
+
+    output += char;
+    lastSignificantChar = char;
+  }
+
+  return output;
+}
+
+function parseJsonObjectWithRepair<T>(payload: string): T {
+  const rawJson = extractJsonObjectText(payload);
+
+  try {
+    return JSON.parse(rawJson) as T;
+  } catch {
+    return JSON.parse(repairLooseJson(rawJson)) as T;
+  }
+}
+
+export function parseSentenceAnalysisResponse(payload: string): Omit<
+  SentenceAnalysisResult,
+  "provider" | "cached"
+> {
+  const parsed = parseJsonObjectWithRepair<{
     translation?: unknown;
     structure?: unknown;
     analysisSteps?: unknown;
     highlights?: unknown;
     clauseBlocks?: unknown;
-  };
+  }>(payload);
 
   const translation = cleanModelOutput(
     typeof parsed.translation === "string" ? parsed.translation : "",
@@ -339,6 +419,23 @@ function sentenceAnalysisNeedsRetry(
 
   const signalCategories = new Set(result.highlights.map((item) => item.category));
   return signalCategories.size < 2;
+}
+
+function sentenceHighlightsNeedSupplement(
+  highlights: SentenceHighlight[],
+): boolean {
+  if (highlights.length < 3) {
+    return true;
+  }
+
+  const categories = new Set(highlights.map((item) => item.category));
+  const hasCoreAction = categories.has("predicate") || categories.has("nonfinite");
+  const hasStructureSignal =
+    categories.has("conjunction") ||
+    categories.has("relative") ||
+    categories.has("preposition");
+
+  return !hasCoreAction || !hasStructureSignal;
 }
 
 async function requestSentenceAnalysis({
@@ -832,29 +929,53 @@ export async function analyzeSentenceWithLlm({
   const endpoint = `${settings.providerBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const sentence = trimContext(text);
   const basePrompt =
-    'You are an English sentence analysis tutor for Chinese students. Use a Tian Jing style exam-prep method: first find signal words and punctuation to cut the sentence into layers; then locate the main clause subject and predicate and state the backbone; then explain relative clauses, subordinate clauses, nonfinite structures, appositives, and modifier chains as branches attached to the backbone; finally give a smooth Chinese translation in natural order. The explanation should feel like a teacher walking through a sentence, practical and clear, not vague and not too academic. Return strict JSON only with keys: translation, structure, analysisSteps, highlights, clauseBlocks. translation is full Chinese translation. structure is one short Chinese summary of the sentence backbone. analysisSteps is an array of exactly 4 Chinese steps, roughly 切层次 / 抓主干 / 拆枝叶 / 顺译. highlights is an array of 3 to 10 exact single-word tokens copied from the original sentence with category from [subject, predicate, nonfinite, conjunction, relative, preposition]. Choose only structural signal words, not content words. Structural signal words include: 1) relative words: who, whom, whose, which, that when they really introduce clauses; 2) subordinators: because, since, as, if, unless, although, though, even though, while, when, before, after, until, where, so that, in order that; 3) nonfinite markers: to do, doing, done, but highlight the real nonfinite verb keyword, not the word to; 4) coordinators and parallel markers: and, or, but, not...but..., not only...but also...; 5) punctuation-triggered logic around commas, semicolons, dashes, and parentheses; 6) sometimes a key preposition in a long modifier chain such as of, in, with, by, through, when it truly helps cut structure; 7) special clause trigger words such as how, whether, what, why in noun clauses. Never highlight ordinary content nouns. Never highlight possessive determiners or simple pronouns like my, your, his, her, its, our, their, it, they, them, this, these, those. Never highlight that when it is only a determiner such as that data. clauseBlocks is an array of 3 to 8 exact text chunks copied from the original sentence in original order. The clauseBlocks must together cover the whole sentence from first word to last word with no missing words and no overlap. Every major part of the sentence should belong to some clauseBlock. If a chunk is too long, split it at commas, relative words, subordinators, coordinating conjunctions, or nonfinite markers so the visual segmentation stays clear. Each chunk should usually stay within about 3 to 12 words when possible. type must be one of [main, relative, subordinate, nonfinite, parallel, modifier]. No markdown or extra text.';
+    'You are an English sentence analysis tutor for Chinese students. Use a Tian Jing style exam-prep method: first find signal words and punctuation to cut the sentence into layers; then locate the main clause subject and predicate and state the backbone; then explain relative clauses, subordinate clauses, noun clauses, nonfinite structures, appositives, modifier chains, and parallel structures as branches attached to the backbone; finally give a smooth Chinese translation in natural order. The explanation should feel like a teacher walking through a sentence, practical and clear, not vague and not too academic. Return strict JSON only with keys: translation, structure, analysisSteps, highlights, clauseBlocks. translation is full Chinese translation. structure is one short Chinese summary of the sentence backbone. analysisSteps is an array of exactly 4 Chinese steps, roughly 切层次 / 抓主干 / 拆枝叶 / 顺译. In step 3 you MUST explicitly say for every important clause or branch what it modifies, explains, depends on, or serves as the object/complement of. For example: who/which/that clause modifies which noun; that/how/whether clause is the object or content of which verb or noun; nonfinite phrase modifies which part or expresses what function. If there is any coordination or parallel structure, you MUST clearly say exactly which words, phrases, or clauses are parallel to each other and what connector links them, such as A and B are parallel, or A / B / C are coordinated by and, or not A but B. highlights is an array of 3 to 10 exact single-word tokens copied from the original sentence with category from [subject, predicate, nonfinite, conjunction, relative, preposition]. Choose only structural signal words, not content words. Structural signal words include: 1) relative words: who, whom, whose, which, that when they really introduce clauses; 2) subordinators: because, since, as, if, unless, although, though, even though, while, when, before, after, until, where, so that, in order that; 3) nonfinite markers: to do, doing, done, but highlight the real nonfinite verb keyword, not the word to; 4) coordinators and parallel markers: and, or, but, not...but..., not only...but also...; 5) punctuation-triggered logic around commas, semicolons, dashes, and parentheses; 6) sometimes a key preposition in a long modifier chain such as of, in, with, by, through, over, under, when it truly helps cut structure; 7) special clause trigger words such as how, whether, what, why in noun clauses. Never highlight ordinary content nouns. Never highlight possessive determiners or simple pronouns like my, your, his, her, its, our, their, it, they, them, this, these, those. Never highlight that when it is only a determiner such as that data. clauseBlocks is an array of 3 to 8 exact text chunks copied from the original sentence in original order. The clauseBlocks must together cover the whole sentence from first word to last word with no missing words and no overlap. Every major part of the sentence should belong to some clauseBlock. If a chunk is too long, split it at commas, relative words, subordinators, coordinating conjunctions, or nonfinite markers so the visual segmentation stays clear. Each chunk should usually stay within about 3 to 12 words when possible. If a clause or phrase contains a long prepositional branch or a preposition-led noun clause that provides a distinct modifier/complement layer, split that branch into its own clauseBlock. However, do not isolate a bare leading preposition by itself; keep the preposition attached to its object, complement, or clause inside the same clauseBlock. type must be one of [main, relative, subordinate, nonfinite, parallel, modifier]. No markdown or extra text.';
+  const syntaxSafePrompt =
+    `${basePrompt} Output must be valid JSON parsable by JSON.parse. Use a compact single JSON object. Escape all double quotes inside string values. Do not omit commas between array items or object fields.`;
   const retryPrompt =
     `${basePrompt} Important quality bar: the highlights must not be empty, and they must include at least one real predicate or nonfinite signal plus at least one connector/relative/preposition signal when available. The clauseBlocks must visually cover the entire sentence. Do not leave any tail text outside the clauseBlocks.`;
 
-  let parsed = await requestSentenceAnalysis({
-    endpoint,
-    apiKey: settings.apiKey,
-    model: settings.providerModel,
-    sentence,
-    systemPrompt: basePrompt,
-  });
+  let parsed: Omit<SentenceAnalysisResult, "provider" | "cached">;
 
-  if (sentenceAnalysisNeedsRetry(parsed, sentence)) {
+  try {
     parsed = await requestSentenceAnalysis({
       endpoint,
       apiKey: settings.apiKey,
       model: settings.providerModel,
       sentence,
-      systemPrompt: retryPrompt,
+      systemPrompt: basePrompt,
+    });
+  } catch {
+    parsed = await requestSentenceAnalysis({
+      endpoint,
+      apiKey: settings.apiKey,
+      model: settings.providerModel,
+      sentence,
+      systemPrompt: syntaxSafePrompt,
     });
   }
 
-  if (parsed.highlights.length < 2) {
+  if (sentenceAnalysisNeedsRetry(parsed, sentence)) {
+    try {
+      parsed = await requestSentenceAnalysis({
+        endpoint,
+        apiKey: settings.apiKey,
+        model: settings.providerModel,
+        sentence,
+        systemPrompt: retryPrompt,
+      });
+    } catch {
+      parsed = await requestSentenceAnalysis({
+        endpoint,
+        apiKey: settings.apiKey,
+        model: settings.providerModel,
+        sentence,
+        systemPrompt: `${retryPrompt} Also keep the output as strict valid JSON with properly escaped quotes and commas.`,
+      });
+    }
+  }
+
+  if (sentenceHighlightsNeedSupplement(parsed.highlights)) {
     const extraHighlights = await requestSentenceHighlights({
       endpoint,
       apiKey: settings.apiKey,

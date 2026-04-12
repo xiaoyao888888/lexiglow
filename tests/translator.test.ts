@@ -135,4 +135,26 @@ describe("sentence analysis parsing", () => {
       ],
     });
   });
+
+  test("repairs common missing-comma issues in sentence analysis json", () => {
+    expect(
+      parseSentenceAnalysisResponse(
+        '{"translation":"请在提交 PR 时披露重要的 LLM 参与部分。","structure":"主干是 please declare。","analysisSteps":["先找主句主干。""再看 when 引导的时间状语。","再看 that 引导的宾语内容。","最后顺译。"],"highlights":[{"text":"When","category":"conjunction"}{"text":"declare","category":"predicate"},{"text":"that","category":"relative"}],"clauseBlocks":[{"text":"When submitting a PR,","type":"subordinate"},{"text":"please declare any parts","type":"main"},{"text":"that had substantial LLM contribution","type":"relative"}]}',
+      ),
+    ).toEqual({
+      translation: "请在提交 PR 时披露重要的 LLM 参与部分。",
+      structure: "主干是 please declare。",
+      analysisSteps: ["先找主句主干。", "再看 when 引导的时间状语。", "再看 that 引导的宾语内容。", "最后顺译。"],
+      highlights: [
+        { text: "When", category: "conjunction" },
+        { text: "declare", category: "predicate" },
+        { text: "that", category: "relative" },
+      ],
+      clauseBlocks: [
+        { text: "When submitting a PR,", type: "subordinate", label: undefined },
+        { text: "please declare any parts", type: "main", label: undefined },
+        { text: "that had substantial LLM contribution", type: "relative", label: undefined },
+      ],
+    });
+  });
 });

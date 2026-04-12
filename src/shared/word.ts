@@ -4,15 +4,16 @@ export interface WordAtOffset {
   end: number;
 }
 
-const ENGLISH_WORD_RE = /^[A-Za-z]+(?:'[A-Za-z]+)?$/;
+const ENGLISH_TOKEN_SOURCE = "[A-Za-z]+(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*";
+const ENGLISH_WORD_RE = new RegExp(`^${ENGLISH_TOKEN_SOURCE}$`);
 
-export function normalizeSingleEnglishWord(surface: string): string {
-  const compact = surface.trim().replace(/^[^A-Za-z']+|[^A-Za-z']+$/g, "");
-  return ENGLISH_WORD_RE.test(compact) ? compact : "";
+export function createEnglishTokenMatcher(): RegExp {
+  return new RegExp(ENGLISH_TOKEN_SOURCE, "g");
 }
 
-function isWordCharacter(char: string | undefined): boolean {
-  return Boolean(char && /[A-Za-z']/u.test(char));
+export function normalizeSingleEnglishWord(surface: string): string {
+  const compact = surface.trim().replace(/^[^A-Za-z'-]+|[^A-Za-z'-]+$/g, "");
+  return ENGLISH_WORD_RE.test(compact) ? compact : "";
 }
 
 function isAlphaNumeric(char: string | undefined): boolean {
@@ -77,7 +78,8 @@ export function isSingleEnglishWord(surface: string): boolean {
 }
 
 export function countEnglishWords(text: string): number {
-  return normalizeSelectionText(text).match(/[A-Za-z]+(?:'[A-Za-z]+)?/g)?.length ?? 0;
+  const matcher = createEnglishTokenMatcher();
+  return normalizeSelectionText(text).match(matcher)?.length ?? 0;
 }
 
 export function isEnglishSelectionText(text: string): boolean {
@@ -107,38 +109,53 @@ export function extractWordAtOffset(text: string, offset: number): WordAtOffset 
     return null;
   }
 
-  let cursor = Math.min(Math.max(offset, 0), text.length - 1);
+  const cursor = Math.min(Math.max(offset, 0), text.length - 1);
+  const candidateOffsets = [cursor, cursor - 1, cursor + 1].filter(
+    (value) => value >= 0 && value < text.length,
+  );
+  const matcher = createEnglishTokenMatcher();
+  let match = matcher.exec(text);
 
-  if (!isWordCharacter(text[cursor])) {
-    if (cursor > 0 && isWordCharacter(text[cursor - 1])) {
-      cursor -= 1;
-    } else if (cursor + 1 < text.length && isWordCharacter(text[cursor + 1])) {
-      cursor += 1;
-    } else {
+  while (match) {
+    const surface = match[0];
+    const start = match.index;
+    const end = start + surface.length;
+
+    if (!candidateOffsets.some((value) => value >= start && value < end)) {
+      match = matcher.exec(text);
+      continue;
+    }
+
+    if (isEmbeddedInTechnicalToken(text, start, end)) {
       return null;
     }
+
+    if (!isEnglishLikeWord(surface)) {
+      return null;
+    }
+
+    if (surface.includes("-")) {
+      const subwordMatcher = /[A-Za-z]+(?:'[A-Za-z]+)?/g;
+      let subMatch = subwordMatcher.exec(surface);
+
+      while (subMatch) {
+        const subStart = start + subMatch.index;
+        const subEnd = subStart + subMatch[0].length;
+
+        if (candidateOffsets.some((value) => value >= subStart && value < subEnd)) {
+          return {
+            surface: subMatch[0],
+            start: subStart,
+            end: subEnd,
+          };
+        }
+
+        subMatch = subwordMatcher.exec(surface);
+      }
+    }
+
+    return { surface, start, end };
   }
 
-  let start = cursor;
-  let end = cursor + 1;
-
-  while (start > 0 && isWordCharacter(text[start - 1])) {
-    start -= 1;
-  }
-
-  while (end < text.length && isWordCharacter(text[end])) {
-    end += 1;
-  }
-
-  if (isEmbeddedInTechnicalToken(text, start, end)) {
-    return null;
-  }
-
-  const surface = text.slice(start, end);
-
-  if (!isEnglishLikeWord(surface)) {
-    return null;
-  }
-
-  return { surface, start, end };
+  return null;
 }

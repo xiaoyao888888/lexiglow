@@ -39,12 +39,26 @@ describe("extractWordAtOffset", () => {
       end: 9,
     });
   });
+
+  test("extracts the hovered subword inside a hyphenated compound", () => {
+    expect(extractWordAtOffset("Use mixed-precision training.", 8)).toEqual({
+      surface: "mixed",
+      start: 4,
+      end: 9,
+    });
+    expect(extractWordAtOffset("Use mixed-precision training.", 14)).toEqual({
+      surface: "precision",
+      start: 10,
+      end: 19,
+    });
+  });
 });
 
 describe("selection helpers", () => {
   test("detects a single english word", () => {
     expect(isSingleEnglishWord("received")).toBe(true);
     expect(isSingleEnglishWord("received.")).toBe(true);
+    expect(isSingleEnglishWord("mixed-precision")).toBe(true);
     expect(isSingleEnglishWord("look up")).toBe(false);
   });
 
@@ -76,5 +90,6 @@ describe("selection helpers", () => {
 
   test("counts english words in normalized selections", () => {
     expect(countEnglishWords("in   charge   of")).toBe(3);
+    expect(countEnglishWords("mixed-precision")).toBe(1);
   });
 });
