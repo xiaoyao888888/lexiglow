@@ -12,7 +12,7 @@
       <stop stop-color="#F4C657" stop-opacity="0.42"/>
       <stop offset="1" stop-color="#F4C657" stop-opacity="0"/>
     </radialGradient>
-    <filter id="shadow" x="666" y="96" width="456" height="404" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <filter id="shadow" x="630" y="92" width="536" height="424" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
       <feOffset dy="22"/>
@@ -21,6 +21,14 @@
       <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
       <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
     </filter>
+    <linearGradient id="cardBg" x1="696" y1="140" x2="1086" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFEFB"/>
+      <stop offset="1" stop-color="#FFF8EC"/>
+    </linearGradient>
+    <linearGradient id="screenBg" x1="726" y1="182" x2="1068" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFFDF7"/>
+    </linearGradient>
   </defs>
 
   <rect width="1280" height="640" rx="36" fill="url(#bg)"/>
@@ -29,8 +37,8 @@
   <rect x="82" y="84" width="1116" height="472" rx="32" fill="white" fill-opacity="0.68" stroke="#E8DED0"/>
 
   <text x="132" y="190" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="82" font-weight="700">LexiGlow</text>
-  <text x="136" y="252" fill="#495467" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="30" font-weight="600">在真实网页里学英语</text>
-  <text x="136" y="314" fill="#1E293B" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="28" font-weight="600">悬浮翻译  ·  英英解释  ·  长难句翻译</text>
+  <text x="136" y="252" fill="#495467" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="30" font-weight="600">在工作里无痛学英语</text>
+  <text x="136" y="314" fill="#1E293B" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="28" font-weight="600">悬浮翻译  ·  英英解释  ·  双击复习</text>
 
   <rect x="132" y="364" width="160" height="40" rx="20" fill="#FFE7A0"/>
   <text x="164" y="391" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="20" font-weight="700">默认 Google</text>
@@ -38,36 +46,42 @@
   <rect x="308" y="364" width="138" height="40" rx="20" fill="rgba(20,33,61,0.08)"/>
   <text x="343" y="391" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="20" font-weight="700">可切 LLM</text>
 
-  <rect x="132" y="426" width="176" height="40" rx="20" fill="rgba(20,33,61,0.08)"/>
-  <text x="163" y="453" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="20" font-weight="700">英英解释可切换</text>
+  <rect x="132" y="426" width="180" height="40" rx="20" fill="rgba(20,33,61,0.08)"/>
+  <text x="164" y="453" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="20" font-weight="700">双击立刻复习</text>
 
-  <rect x="322" y="426" width="176" height="40" rx="20" fill="rgba(20,33,61,0.08)"/>
-  <text x="352" y="453" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="20" font-weight="700">同页长难句翻译</text>
+  <rect x="326" y="426" width="230" height="40" rx="20" fill="rgba(20,33,61,0.08)"/>
+  <text x="352" y="453" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="20" font-weight="700">无痛学习，不额外占时间</text>
 
   <text x="136" y="522" fill="#5B6470" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="24">
-    生词提示、阅读理解、个人词汇成长，都留在同一个网页里完成。
+    不切出工作流，不额外开背词 app，把学习直接叠加在你的日常阅读里。
   </text>
 
   <g filter="url(#shadow)">
-    <rect x="712" y="132" width="362" height="318" rx="26" fill="#FFFDF7"/>
-    <rect x="738" y="160" width="88" height="30" rx="15" fill="#FFE8A3"/>
-    <text x="760" y="181" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="17" font-weight="700">生词</text>
+    <rect x="696" y="132" width="398" height="324" rx="30" fill="url(#cardBg)" stroke="#F1E7D8"/>
+    <rect x="724" y="164" width="342" height="232" rx="24" fill="url(#screenBg)" stroke="#F2EADF"/>
 
-    <text x="738" y="220" fill="#172033" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="22" font-weight="700">benefit</text>
-    <text x="738" y="252" fill="#2B3545" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="17">n. 好处；优势</text>
+    <circle cx="748" cy="186" r="5" fill="#FFB86C"/>
+    <circle cx="766" cy="186" r="5" fill="#FFD86C"/>
+    <circle cx="784" cy="186" r="5" fill="#89D185"/>
 
-    <rect x="738" y="272" width="112" height="30" rx="15" fill="#E8F0FF"/>
-    <text x="760" y="292" fill="#244A7C" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="15" font-weight="700">英英解释</text>
-    <text x="738" y="326" fill="#495467" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="15">A benefit is a good result you get from something.</text>
+    <text x="748" y="226" fill="#6A7282" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="13" font-weight="700">工作中的英文页面</text>
+    <text x="748" y="258" fill="#1E293B" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="14">The benchmark shows a strong <tspan fill="#D48B00">benefit</tspan> for teams</text>
+    <text x="748" y="280" fill="#1E293B" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="14">that keep reading, coding, and learning</text>
+    <text x="748" y="302" fill="#1E293B" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="14">without leaving their normal workflow.</text>
+    <text x="748" y="332" fill="#6A7282" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="13" font-weight="700">悬浮浮层</text>
 
-    <rect x="738" y="354" width="128" height="30" rx="15" fill="#FFE8A3"/>
-    <text x="759" y="374" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="15" font-weight="700">长难句翻译</text>
-    <rect x="738" y="394" width="310" height="26" rx="13" fill="#F8D4E7" stroke="#E8A7C8"/>
-    <rect x="1054" y="394" width="0" height="0" fill="none"/>
-    <text x="752" y="412" fill="#172033" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="14" font-weight="700">This gives us the same mixed-precision benefit</text>
-    <rect x="738" y="428" width="152" height="26" rx="13" fill="#D8F2CF" stroke="#98D38F"/>
-    <text x="752" y="446" fill="#172033" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="14" font-weight="700">as autocast</text>
-    <rect x="896" y="428" width="152" height="26" rx="13" fill="#F8EFB6" stroke="#E2D36A"/>
-    <text x="910" y="446" fill="#172033" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="14" font-weight="700">but with full control</text>
+    <g>
+      <rect x="748" y="346" width="212" height="82" rx="18" fill="#FFFDF8" stroke="#EFE4D3"/>
+      <text x="766" y="370" fill="#172033" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="22" font-weight="700">benefit</text>
+      <text x="766" y="394" fill="#253449" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="15">n. 好处；优势</text>
+      <rect x="766" y="404" width="86" height="18" rx="9" fill="#DFEAFE"/>
+      <text x="782" y="417" fill="#28508A" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="10.5" font-weight="700">英英解释</text>
+      <text x="860" y="417" fill="#5B6470" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="10.5">a good result you get</text>
+    </g>
+
+    <rect x="978" y="350" width="88" height="26" rx="13" fill="#FFE7A0"/>
+    <text x="995" y="367" fill="#172033" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="12" font-weight="700">双击复习</text>
+    <rect x="978" y="386" width="88" height="26" rx="13" fill="#E9F4DE"/>
+    <text x="990" y="403" fill="#285A2A" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="12" font-weight="700">无痛学习</text>
   </g>
 </svg>

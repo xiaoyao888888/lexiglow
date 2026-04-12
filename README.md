@@ -1,13 +1,13 @@
-# LexiGlow | 网页英语生词翻译与长难句分析
+# LexiGlow | 在工作里无痛学英语
 
 ![LexiGlow banner](./assets/lexiglow-banner.svg)
 
 <p align="center">
-  在真实网页里学英语：悬浮翻译、双击复习、英英解释、长难句翻译。
+  在工作里无痛学英语：悬浮翻译、双击复习、英英解释，不额外占时间。
 </p>
 
 <p align="center">
-  Learn English on real web pages with hover translation, English explanations, and sentence analysis.
+  Learn English inside your normal workflow with hover translation, review tracking, and English explanations.
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@
 
 ## LexiGlow 是什么
 
-LexiGlow 是一个面向中文用户的 Chrome 英语阅读插件。它把查词、复习、发音、英英解释和长难句理解直接放进真实网页里，不需要频繁切到别的背词软件或翻译页面。
+LexiGlow 是一个面向中文用户的 Chrome 英语阅读插件。它不是让你额外切出去背词，而是把查词、复习、发音、英英解释和长难句理解直接叠加进你平时的网页阅读和工作流里。
 
 它更适合这类阅读场景：
 
@@ -46,10 +46,10 @@ LexiGlow 是一个面向中文用户的 Chrome 英语阅读插件。它把查词
   用 LLM 按当前词汇水平生成更容易读懂的英文解释
 - 选中文本即翻译：
   单词、词组、整句都能先看默认翻译
-- 长难句拆解：
-  在同一个 tooltip 内展示句块拆分、关键词提示、整句翻译和拆解过程
 - 英美发音：
   支持英音 / 美音音标和点击播放
+- 长难句拆解：
+  在同一个 tooltip 内展示句块拆分、关键词提示、整句翻译和拆解过程
 - 学习状态累积：
   已掌握词、复习词、忽略词会持续影响后续提示
 
