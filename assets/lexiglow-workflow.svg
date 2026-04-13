@@ -1,0 +1,58 @@
+<svg width="1280" height="420" viewBox="0 0 1280 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="84" y1="58" x2="1194" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBF4E8"/>
+      <stop offset="1" stop-color="#F2E4D1"/>
+    </linearGradient>
+    <linearGradient id="line" x1="212" y1="234" x2="1068" y2="234" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4BF69"/>
+      <stop offset="1" stop-color="#C98E3A"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="420" rx="32" fill="url(#bg)"/>
+  <text x="84" y="84" fill="#14213D" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="30" font-weight="700">LexiGlow 的主线体验</text>
+  <text x="84" y="116" fill="#5D6979" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="18">先给一个足够快的默认答案，再把更重的理解动作按需展开。</text>
+
+  <path d="M214 234H1064" stroke="url(#line)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1052 224L1066 234L1052 244" stroke="#C98E3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g>
+    <rect x="84" y="164" width="238" height="138" rx="24" fill="#FFFDF9" stroke="#E9D9C1"/>
+    <circle cx="116" cy="196" r="18" fill="#14213D"/>
+    <text x="110" y="202" fill="#FFFDF8" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="15" font-weight="700">1</text>
+    <text x="144" y="200" fill="#14213D" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="22" font-weight="700">悬停单词</text>
+    <text x="108" y="234" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">页面里直接弹出 tooltip</text>
+    <text x="108" y="258" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">默认先看 Google 结果</text>
+  </g>
+
+  <g>
+    <rect x="356" y="164" width="238" height="138" rx="24" fill="#FFFDF9" stroke="#E9D9C1"/>
+    <circle cx="388" cy="196" r="18" fill="#14213D"/>
+    <text x="382" y="202" fill="#FFFDF8" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="15" font-weight="700">2</text>
+    <text x="416" y="200" fill="#14213D" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="22" font-weight="700">按需切 LLM</text>
+    <text x="380" y="234" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">默认答案不够准时再切换</text>
+    <text x="380" y="258" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">可带语境翻译或英英解释</text>
+  </g>
+
+  <g>
+    <rect x="628" y="164" width="238" height="138" rx="24" fill="#FFFDF9" stroke="#E9D9C1"/>
+    <circle cx="660" cy="196" r="18" fill="#14213D"/>
+    <text x="654" y="202" fill="#FFFDF8" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="15" font-weight="700">3</text>
+    <text x="688" y="200" fill="#14213D" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="22" font-weight="700">双击恢复</text>
+    <text x="652" y="234" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">把忘掉的词拉回复习状态</text>
+    <text x="652" y="258" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">后续提示会继续受它影响</text>
+  </g>
+
+  <g>
+    <rect x="900" y="164" width="238" height="138" rx="24" fill="#FFFDF9" stroke="#E9D9C1"/>
+    <circle cx="932" cy="196" r="18" fill="#14213D"/>
+    <text x="926" y="202" fill="#FFFDF8" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="15" font-weight="700">4</text>
+    <text x="960" y="200" fill="#14213D" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="22" font-weight="700">长难句拆解</text>
+    <text x="924" y="234" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">词组、整句、复杂句都能处理</text>
+    <text x="924" y="258" fill="#516072" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16">句块提示和整句翻译同屏</text>
+  </g>
+
+  <rect x="84" y="338" width="1054" height="44" rx="16" fill="#FFF9EE" stroke="#E8D8C2"/>
+  <text x="108" y="366" fill="#5A6575" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif" font-size="16" font-weight="700">掌握词、忽略词和词形归并会贯穿整个流程，所以提示会越来越贴近你的真实阅读状态。</text>
+</svg>

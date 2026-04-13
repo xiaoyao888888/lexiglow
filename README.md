@@ -1,6 +1,6 @@
 # LexiGlow | 在工作流里顺手学英语
 
-![LexiGlow banner](./assets/lexiglow-banner.svg)
+![LexiGlow banner showing the in-page tooltip workflow](./assets/lexiglow-banner.svg)
 
 <p align="center">
   默认用 Google 快速查词，只有在需要更高质量时才切到语境翻译；复习、英英解释和长难句分析都留在当前页面完成。
@@ -65,6 +65,8 @@ LexiGlow 是一个面向中文用户的 Chrome 英语阅读插件。它不是让
   已掌握词、复习词、忽略词会持续影响后续提示
 - 常见词形归并：
   标记 `add` 为已掌握后，`adds / added / adding` 会一起按已掌握处理；`addition / additive` 这类派生词仍单独判断
+
+![LexiGlow workflow from hover lookup to sentence analysis](./assets/lexiglow-workflow.svg)
 
 ## 安装使用
 
