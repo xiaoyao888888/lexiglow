@@ -52,6 +52,8 @@ LexiGlow 是一个面向中文用户的 Chrome 英语阅读插件。它不是让
   在同一个 tooltip 内展示句块拆分、关键词提示、整句翻译和拆解过程
 - 学习状态累积：
   已掌握词、复习词、忽略词会持续影响后续提示
+- 常见词形归并：
+  标记 `add` 为已掌握后，`adds / added / adding` 会一起按已掌握处理；`addition / additive` 这类派生词仍单独判断
 
 ## 安装使用
 
@@ -76,6 +78,26 @@ npm run build
 4. 选中一个词组或整句，确认会先出现 Google 翻译
 5. 点击 `LLM 翻译`，确认可看到更强语境翻译或英英解释
 6. 点击 `长难句翻译`，确认会切到分析视图
+
+如果你想验证“已掌握词形归并”是否生效，建议这样测：
+
+1. 打开扩展设置页，把“默认已掌握前 N 词”临时改成 `0`
+2. 搜索 `add` 并点 `设为已掌握`
+3. 刷新一个包含下面文本的英文页面：
+
+```text
+I add notes every day.
+She adds comments quickly.
+They added more details yesterday.
+We are adding new examples now.
+The addition was helpful.
+This is an additive effect.
+```
+
+预期结果：
+
+- `add / adds / added / adding` 不再作为待翻译词提示
+- `addition / additive` 仍会继续提示
 
 ## 许可证与商用
 

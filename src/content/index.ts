@@ -1323,6 +1323,8 @@ function createTooltipRoot() {
   const button = document.createElement("button");
   button.className = "wordwise-button";
   button.textContent = "已掌握";
+  button.title =
+    "会同时标记常见词形变化，如 add、adds、added、adding；不包含 addition、additive 这类派生词。";
 
   const primaryTranslationEl = document.createElement("div");
   primaryTranslationEl.className = "wordwise-primary-translation";

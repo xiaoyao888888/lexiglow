@@ -19,6 +19,37 @@ function uniqueCandidates(candidates: string[]): string[] {
   return [...new Set(candidates.filter(Boolean))];
 }
 
+function normalizePossessiveToken(cleaned: string): string {
+  let token = cleaned;
+
+  if (token.endsWith("'s")) {
+    token = token.slice(0, -2);
+  } else if (token.endsWith("s'")) {
+    token = token.slice(0, -1);
+  }
+
+  return token;
+}
+
+function pushStemVariants(candidates: string[], stem: string) {
+  if (!stem) {
+    return;
+  }
+
+  const collapsedStem = collapseDoubleEnding(stem);
+  candidates.push(stem);
+
+  if (collapsedStem !== stem) {
+    candidates.push(collapsedStem);
+  }
+
+  candidates.push(`${stem}e`);
+
+  if (collapsedStem !== stem) {
+    candidates.push(`${collapsedStem}e`);
+  }
+}
+
 export function cleanSurfaceToken(surface: string): string {
   if (/\d/.test(surface)) {
     return "";
@@ -40,13 +71,7 @@ export function toLemma(surface: string): string {
     return "";
   }
 
-  let token = cleaned;
-
-  if (token.endsWith("'s")) {
-    token = token.slice(0, -2);
-  } else if (token.endsWith("s'")) {
-    token = token.slice(0, -1);
-  }
+  const token = normalizePossessiveToken(cleaned);
 
   if (token.endsWith("ies") && token.length > 4) {
     return `${token.slice(0, -3)}y`;
@@ -82,13 +107,7 @@ export function getLemmaCandidates(surface: string): string[] {
     return [];
   }
 
-  let token = cleaned;
-
-  if (token.endsWith("'s")) {
-    token = token.slice(0, -2);
-  } else if (token.endsWith("s'")) {
-    token = token.slice(0, -1);
-  }
+  const token = normalizePossessiveToken(cleaned);
 
   const candidates = [token];
 
@@ -97,9 +116,7 @@ export function getLemmaCandidates(surface: string): string[] {
   }
 
   if (token.endsWith("ing") && token.length > 5) {
-    const base = collapseDoubleEnding(token.slice(0, -3));
-    candidates.push(base);
-    candidates.push(`${base}e`);
+    pushStemVariants(candidates, token.slice(0, -3));
   }
 
   if (token.endsWith("ied") && token.length > 4) {
@@ -107,11 +124,7 @@ export function getLemmaCandidates(surface: string): string[] {
   }
 
   if (token.endsWith("ed") && token.length > 4) {
-    const rawBase = token.slice(0, -2);
-    const collapsedBase = collapseDoubleEnding(rawBase);
-    candidates.push(collapsedBase);
-    candidates.push(`${rawBase}e`);
-    candidates.push(`${collapsedBase}e`);
+    pushStemVariants(candidates, token.slice(0, -2));
   }
 
   if (token.endsWith("es") && token.length > 4) {

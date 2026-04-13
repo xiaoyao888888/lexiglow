@@ -1,6 +1,6 @@
 import { DEFAULT_KNOWN_BASE_RANK, MAX_KNOWN_BASE_RANK } from "./constants";
 import { BUILTIN_IGNORED_WORDS } from "./ignoredWords";
-import { lookupRank, resolveLookupLemma } from "./lexicon";
+import { lookupRank, resolveMasteryKey } from "./lexicon";
 import type { LearnerLevelBand, UserSettings, WordFlags } from "./types";
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
 };
 
 function uniqueNormalizedWords(words: string[]): string[] {
-  return [...new Set(words.map((word) => resolveLookupLemma(word)).filter(Boolean))].sort();
+  return [...new Set(words.map((word) => resolveMasteryKey(word)).filter(Boolean))].sort();
 }
 
 export function looksLikeSpecialTerm(surface: string, lemma: string, rank: number | null): boolean {
@@ -88,7 +88,9 @@ export function resolveWordFlags(
   settings: UserSettings,
   surface = lemma,
 ): WordFlags {
-  if (!lemma) {
+  const masteryKey = resolveMasteryKey(surface || lemma);
+
+  if (!lemma || !masteryKey) {
     return {
       isIgnored: false,
       isKnown: false,
@@ -97,7 +99,7 @@ export function resolveWordFlags(
     };
   }
 
-  const forceUnmastered = settings.unmasteredOverrides.includes(lemma);
+  const forceUnmastered = settings.unmasteredOverrides.includes(masteryKey);
 
   if (forceUnmastered) {
     return {
@@ -108,7 +110,7 @@ export function resolveWordFlags(
     };
   }
 
-  if (isBuiltinIgnoredWord(lemma) || settings.ignoredWords.includes(lemma)) {
+  if (isBuiltinIgnoredWord(masteryKey) || settings.ignoredWords.includes(masteryKey)) {
     return {
       isIgnored: true,
       isKnown: false,
@@ -117,7 +119,7 @@ export function resolveWordFlags(
     };
   }
 
-  const userMastered = settings.masteredOverrides.includes(lemma);
+  const userMastered = settings.masteredOverrides.includes(masteryKey);
 
   if (userMastered) {
     return {
@@ -149,7 +151,7 @@ export function resolveWordFlags(
 }
 
 export function setWordMastered(settings: UserSettings, lemma: string): UserSettings {
-  const normalized = resolveLookupLemma(lemma);
+  const normalized = resolveMasteryKey(lemma);
 
   if (!normalized) {
     return settings;
@@ -168,7 +170,7 @@ export function setWordUnmastered(
   lemma: string,
   rank: number | null,
 ): UserSettings {
-  const normalized = resolveLookupLemma(lemma);
+  const normalized = resolveMasteryKey(lemma);
 
   if (!normalized) {
     return settings;
@@ -186,7 +188,7 @@ export function setWordUnmastered(
 }
 
 export function setWordIgnored(settings: UserSettings, lemma: string): UserSettings {
-  const normalized = resolveLookupLemma(lemma);
+  const normalized = resolveMasteryKey(lemma);
 
   if (!normalized) {
     return settings;
@@ -201,7 +203,7 @@ export function setWordIgnored(settings: UserSettings, lemma: string): UserSetti
 }
 
 export function removeWordIgnored(settings: UserSettings, lemma: string): UserSettings {
-  const normalized = resolveLookupLemma(lemma);
+  const normalized = resolveMasteryKey(lemma);
 
   if (!normalized) {
     return settings;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { lookupRank } from "../src/shared/lexicon";
 import {
   DEFAULT_SETTINGS,
   countTotalKnown,
@@ -38,6 +39,31 @@ describe("settings resolution", () => {
     const settings = setWordMastered(DEFAULT_SETTINGS, "tailwindcss");
     const flags = resolveWordFlags("tailwindcss", null, settings);
     expect(flags.isKnown).toBe(true);
+  });
+
+  test("treats common inflections as the same mastered word", () => {
+    const settings = setWordMastered(DEFAULT_SETTINGS, "add");
+    expect(settings.masteredOverrides).toContain("add");
+    expect(resolveWordFlags("add", lookupRank("add"), settings, "add").isKnown).toBe(true);
+    expect(resolveWordFlags("added", lookupRank("added"), settings, "added").isKnown).toBe(true);
+    expect(resolveWordFlags("adding", lookupRank("adding"), settings, "adding").isKnown).toBe(true);
+    expect(resolveWordFlags("adds", lookupRank("adds"), settings, "adds").isKnown).toBe(true);
+  });
+
+  test("keeps derived words separate from the mastered inflection group", () => {
+    const settings = setWordMastered(updateKnownBaseRank(DEFAULT_SETTINGS, 0), "add");
+    const additionFlags = resolveWordFlags("addition", lookupRank("addition"), settings, "addition");
+    const additiveFlags = resolveWordFlags("additive", lookupRank("additive"), settings, "additive");
+    expect(additionFlags.isKnown).toBe(false);
+    expect(additionFlags.shouldTranslate).toBe(true);
+    expect(additiveFlags.isKnown).toBe(false);
+    expect(additiveFlags.shouldTranslate).toBe(true);
+  });
+
+  test("stores unmastered inflections under the same mastery key", () => {
+    const settings = setWordUnmastered(DEFAULT_SETTINGS, "added", lookupRank("added"));
+    expect(settings.unmasteredOverrides).toContain("add");
+    expect(resolveWordFlags("adding", lookupRank("adding"), settings, "adding").shouldTranslate).toBe(true);
   });
 
   test("ignored words override mastery", () => {

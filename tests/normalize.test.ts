@@ -22,4 +22,10 @@ describe("normalize helpers", () => {
       expect.arrayContaining(["received", "receiv", "receive"]),
     );
   });
+
+  test("keeps doubled-consonant stems available for mastery resolution", () => {
+    expect(getLemmaCandidates("added")).toEqual(expect.arrayContaining(["added", "add", "ad"]));
+    expect(getLemmaCandidates("adding")).toEqual(expect.arrayContaining(["adding", "add", "ad"]));
+    expect(getLemmaCandidates("houses")).toEqual(expect.arrayContaining(["houses", "hous", "house"]));
+  });
 });

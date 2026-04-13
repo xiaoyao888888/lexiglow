@@ -24,3 +24,19 @@ export function resolveLookupLemma(surface: string): string {
 
   return candidates.find((candidate) => RANK_MAP.has(candidate)) ?? candidates[0];
 }
+
+export function resolveMasteryKey(surface: string): string {
+  const candidates = getLemmaCandidates(surface);
+
+  if (!candidates.length) {
+    return "";
+  }
+
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  const variants = candidates.slice(1);
+
+  return variants.find((candidate) => RANK_MAP.has(candidate)) ?? variants[0] ?? candidates[0];
+}

@@ -66,7 +66,7 @@ app.innerHTML = `
     <section class="panel">
       <h2>搜索和管理词</h2>
       <input id="searchInput" type="search" placeholder="输入单词，如 running / chatgpt" />
-      <p class="muted">可以把词设为已掌握、未掌握，或加入永不翻译列表。</p>
+      <p class="muted">可以把词设为已掌握、未掌握，或加入永不翻译列表。已掌握/未掌握会同时作用于常见词形变化，如 add、adds、added、adding；不包含 addition、additive 这类派生词。</p>
       <div class="search-results" id="searchResults"></div>
     </section>
     <section class="panel">
@@ -214,6 +214,9 @@ function renderSearch() {
     .map((entry) => {
       const flags = resolveWordFlags(entry.lemma, entry.rank, settings, entry.lemma);
       const knownActionLabel = flags.isKnown ? "设为未掌握" : "设为已掌握";
+      const knownActionTitle = flags.isKnown
+        ? "会同时取消这个词的常见词形变化状态，如 add、adds、added、adding；不包含 addition、additive 这类派生词。"
+        : "会同时标记这个词的常见词形变化，如 add、adds、added、adding；不包含 addition、additive 这类派生词。";
       const ignoreActionLabel =
         flags.isIgnored && !isBuiltinIgnoredWord(entry.lemma) ? "取消忽略" : "永不翻译";
 
@@ -226,7 +229,7 @@ function renderSearch() {
           <div class="word-actions">
             ${
               !flags.isIgnored
-                ? `<button class="primary" data-action="toggle-known">${knownActionLabel}</button>`
+                ? `<button class="primary" data-action="toggle-known" title="${knownActionTitle}">${knownActionLabel}</button>`
                 : ""
             }
             ${
