@@ -44,12 +44,14 @@ const TOOLTIP_STYLE = `
       "Microsoft YaHei UI", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
     position: fixed;
     min-width: 220px;
-    max-width: 360px;
-    padding: 12px 14px;
-    border-radius: 14px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    max-width: 344px;
+    padding: 14px 15px 13px;
+    border-radius: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
     background: rgba(255, 252, 245, 0.96);
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+    box-shadow:
+      0 12px 30px rgba(15, 23, 42, 0.1),
+      0 2px 8px rgba(15, 23, 42, 0.04);
     color: #172033;
     font-family: var(--wordwise-ui-font);
     backdrop-filter: blur(12px);
@@ -57,18 +59,18 @@ const TOOLTIP_STYLE = `
   }
   .wordwise-close {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 24px;
-    height: 24px;
+    top: 9px;
+    right: 9px;
+    width: 22px;
+    height: 22px;
     border: 0;
     border-radius: 999px;
-    background: rgba(15, 23, 42, 0.08);
-    color: #475569;
+    background: rgba(15, 23, 42, 0.06);
+    color: #64748b;
     display: none;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 15px;
     line-height: 1;
     cursor: pointer;
   }
@@ -84,65 +86,81 @@ const TOOLTIP_STYLE = `
     max-height: min(72vh, 780px);
     overflow-y: auto;
   }
+  .wordwise-card[data-mode="word"] {
+    padding-bottom: 9px;
+  }
   .wordwise-word-view[data-visible="false"],
   .wordwise-analysis-view[data-visible="false"] {
     display: none;
   }
+  .wordwise-word-view {
+    display: grid;
+    gap: 11px;
+  }
+  .wordwise-word-view[data-layout="selection"] {
+    gap: 8px;
+  }
   .wordwise-surface {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
-    margin-bottom: 4px;
+    line-height: 1.25;
+    margin-bottom: 0;
     color: #10213a;
+    letter-spacing: 0.01em;
   }
   .wordwise-pronunciation {
     display: none;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px;
-    margin: 8px 0 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin: 0;
   }
   .wordwise-pronunciation[data-visible="true"] {
     display: grid;
   }
   .wordwise-pronunciation-chip {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    padding: 7px 10px;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.05);
+    gap: 6px;
+    min-width: 0;
+    padding: 5px 9px;
+    border-radius: 11px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(248, 250, 252, 0.48);
     color: #334155;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1;
   }
   .wordwise-pronunciation-text {
     display: inline-flex;
-    align-items: flex-start;
-    gap: 6px;
+    align-items: center;
+    gap: 5px;
     min-width: 0;
     color: #475569;
-    white-space: normal;
-    flex-wrap: wrap;
+    white-space: nowrap;
+    flex-wrap: nowrap;
   }
   .wordwise-pronunciation-label {
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     color: #64748b;
     flex: 0 0 auto;
   }
   .wordwise-pronunciation-ipa {
+    font-size: 11px;
     font-weight: 600;
     color: #7c6f45;
     min-width: 0;
     overflow-wrap: anywhere;
-    word-break: break-word;
-    line-height: 1.25;
+    word-break: break-all;
+    line-height: 1;
   }
   .wordwise-pronunciation-action {
     border: 0;
     background: transparent;
     color: #ea580c;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -157,28 +175,78 @@ const TOOLTIP_STYLE = `
     color: #dc2626;
   }
   .wordwise-pronunciation-action svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     display: block;
   }
   .wordwise-translation {
-    margin-bottom: 8px;
+    margin: 0;
     display: none;
+    opacity: 1;
+    transform: translateY(0);
+    filter: none;
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease,
+      filter 180ms ease;
   }
   .wordwise-translation[data-visible="true"] {
     display: block;
+    padding-top: 9px;
+    padding-left: 12px;
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+    border-left: 1px solid rgba(194, 65, 12, 0.1);
+  }
+  .wordwise-translation[data-compact="true"][data-visible="true"] {
+    padding-top: 8px;
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-translation[data-visible="true"] {
+    padding-right: 34px;
+    padding-top: 0;
+    padding-left: 18px;
+    border-top: 0;
+    border-left: 1px solid rgba(59, 130, 246, 0.08);
+  }
+  .wordwise-translation[data-transition="loading"] {
+    opacity: 0.68;
+    filter: saturate(0.92);
+  }
+  .wordwise-translation[data-transition="swap-out"] {
+    opacity: 0.16;
+    transform: translateY(5px);
+    filter: saturate(0.9);
+  }
+  .wordwise-translation[data-transition="swap-in"] {
+    opacity: 0;
+    transform: translateY(5px);
+    filter: saturate(0.94);
   }
   .wordwise-primary-translation {
+    font-size: 14.75px;
+    line-height: 1.58;
+    color: #33475f;
+    font-weight: 520;
+    letter-spacing: 0.002em;
+  }
+  .wordwise-translation[data-compact="true"] .wordwise-primary-translation {
+    font-size: 15.25px;
+    line-height: 1.44;
+    color: #314256;
+    font-weight: 540;
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-primary-translation {
     font-size: 14px;
     line-height: 1.5;
-    color: #1f2937;
-    font-weight: 700;
+    color: #42556c;
+    font-weight: 500;
   }
   .wordwise-secondary-translation {
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.6;
-    color: #4b5563;
-    margin-top: 6px;
+    color: #6f8094;
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
     display: none;
   }
   .wordwise-secondary-translation[data-visible="true"] {
@@ -186,29 +254,39 @@ const TOOLTIP_STYLE = `
   }
   .wordwise-english-explanation {
     display: none;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px dashed rgba(100, 116, 139, 0.28);
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
   }
   .wordwise-english-explanation[data-visible="true"] {
     display: block;
   }
   .wordwise-english-explanation-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: #64748b;
-    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #7b8798;
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
   }
   .wordwise-english-explanation-text {
-    font-size: 13px;
-    line-height: 1.65;
-    color: #334155;
+    font-size: 12px;
+    line-height: 1.58;
+    color: #66768b;
   }
   .wordwise-hint {
-    font-size: 13px;
-    line-height: 1.5;
-    color: #6b7280;
-    margin-bottom: 8px;
+    font-size: 10.5px;
+    line-height: 1.28;
+    color: #929baa;
+    margin: 0;
+  }
+  .wordwise-hint[data-kind="status"] {
+    justify-self: end;
+    text-align: right;
+    line-height: 1.12;
+    margin-bottom: -2px;
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-hint[data-kind="status"] {
+    margin-top: -10px;
   }
   .wordwise-hint[data-visible="false"] {
     display: none;
@@ -224,36 +302,104 @@ const TOOLTIP_STYLE = `
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 8px;
+    align-items: center;
+    margin: 0;
+  }
+  .wordwise-word-view[data-layout="word"] .wordwise-actions {
+    gap: 6px;
+    margin-top: 3px;
+    padding-left: 10px;
+  }
+  .wordwise-word-view[data-layout="word"] .wordwise-button {
+    min-height: 26px;
+    min-width: 72px;
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 530;
+    box-shadow: none;
+  }
+  .wordwise-word-view[data-layout="word"] .wordwise-button--secondary {
+    background: rgba(255, 255, 255, 0.76);
+    color: #41546c;
+    border-color: rgba(148, 163, 184, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+  }
+  .wordwise-word-view[data-layout="word"] .wordwise-button:not(.wordwise-button--secondary) {
+    background: #31445c;
+  }
+  .wordwise-word-view[data-layout="word"] .wordwise-button:hover {
+    transform: translateY(0);
+  }
+  .wordwise-word-view[data-layout="word"] .wordwise-button:not(.wordwise-button--secondary):hover {
+    background: #2b3d54;
+  }
+  .wordwise-word-view[data-layout="word"] .wordwise-meta {
+    margin-top: -5px;
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-actions {
+    gap: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+    margin-top: -1px;
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-button {
+    min-height: 28px;
+    min-width: 84px;
+    padding: 0 12px;
   }
   .wordwise-meta {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 8px;
+    margin-top: -1px;
+    margin-bottom: -2px;
   }
   .wordwise-rank {
-    font-size: 12px;
-    color: #5f6b7a;
+    font-size: 10.25px;
+    line-height: 1.1;
+    color: #96a0ae;
+    letter-spacing: 0.01em;
+    text-align: right;
   }
   .wordwise-button {
-    border: 0;
+    border: 1px solid transparent;
     border-radius: 999px;
-    background: #14213d;
+    min-height: 30px;
+    min-width: 88px;
+    padding: 0 13px;
+    background: #22324a;
     color: white;
-    padding: 6px 10px;
-    font-size: 12px;
+    font-size: 10.75px;
+    font-weight: 560;
+    line-height: 1;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
   }
   .wordwise-button:hover {
-    background: #20335d;
+    background: #1d2d44;
+    transform: translateY(-1px);
   }
   .wordwise-button--secondary {
-    background: rgba(20, 33, 61, 0.08);
-    color: #14213d;
+    background: rgba(255, 255, 255, 0.9);
+    color: #24364d;
+    border-color: rgba(148, 163, 184, 0.2);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.72),
+      0 1px 2px rgba(148, 163, 184, 0.08);
   }
   .wordwise-button--secondary:hover {
-    background: rgba(20, 33, 61, 0.14);
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(148, 163, 184, 0.28);
   }
   .wordwise-analysis-header {
     display: flex;
@@ -1061,6 +1207,12 @@ function waitForPaint(): Promise<void> {
   });
 }
 
+function waitForDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 function normalizeHighlightWord(value: string): string {
   return value.toLowerCase().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
 }
@@ -1610,19 +1762,22 @@ function createTooltipRoot() {
   const translationEl = document.createElement("div");
   translationEl.className = "wordwise-translation";
   translationEl.dataset.visible = "false";
+  translationEl.dataset.compact = "false";
+  translationEl.dataset.transition = "idle";
 
   const hintEl = document.createElement("div");
   hintEl.className = "wordwise-hint";
   hintEl.dataset.visible = "true";
   hintEl.dataset.loading = "false";
-  hintEl.textContent = "默认使用 Google 翻译，不满意可切换到 LLM。";
+  hintEl.dataset.kind = "prompt";
+  hintEl.textContent = "可切换到语境翻译。";
 
   const actionsEl = document.createElement("div");
   actionsEl.className = "wordwise-actions";
 
   const llmButton = document.createElement("button");
   llmButton.className = "wordwise-button wordwise-button--secondary";
-  llmButton.textContent = "LLM 翻译";
+  llmButton.textContent = "语境翻译";
 
   const britishChip = document.createElement("div");
   britishChip.className = "wordwise-pronunciation-chip";
@@ -1701,6 +1856,7 @@ function createTooltipRoot() {
   const wordView = document.createElement("div");
   wordView.className = "wordwise-word-view";
   wordView.dataset.visible = "true";
+  wordView.dataset.layout = "word";
 
   const analysisView = document.createElement("div");
   analysisView.className = "wordwise-analysis-view";
@@ -1802,7 +1958,7 @@ function createTooltipRoot() {
   translationEl.append(primaryTranslationEl, secondaryTranslationEl, englishExplanationEl);
   actionsEl.append(llmButton, selectionAnalysisButton, ignoreButton, button);
   metaEl.append(rankEl);
-  wordView.append(surfaceEl, pronunciationEl, hintEl, translationEl, actionsEl, metaEl);
+  wordView.append(surfaceEl, pronunciationEl, translationEl, actionsEl, metaEl, hintEl);
   analysisHeader.append(analysisTitleEl, analysisTriggerButton);
   analysisView.append(
     analysisHeader,
@@ -2138,6 +2294,7 @@ function hideTooltip() {
   tooltip.wordView.dataset.visible = "true";
   tooltip.analysisView.dataset.visible = "false";
   tooltip.closeButton.dataset.visible = "false";
+  tooltip.translationEl.dataset.transition = "idle";
   activeResult = null;
   activeAnchorRect = null;
   activeContext = null;
@@ -2168,6 +2325,48 @@ function resetEnglishExplanationDisplay() {
 function showEnglishExplanation(explanation: string) {
   tooltip.englishExplanationTextEl.textContent = explanation;
   tooltip.englishExplanationEl.dataset.visible = "true";
+}
+
+function setTranslationPresentation(
+  mode: "word" | "selection",
+  translation?: string,
+  sentenceTranslation?: string,
+  englishExplanation?: string,
+) {
+  const hasSecondary = Boolean(sentenceTranslation?.trim());
+  const hasExplanation = Boolean(englishExplanation?.trim());
+  const shouldCompact = mode === "word" && Boolean(translation?.trim()) && !hasSecondary && !hasExplanation;
+
+  tooltip.translationEl.dataset.compact = shouldCompact ? "true" : "false";
+}
+
+function hasVisibleTranslationContent(): boolean {
+  return tooltip.translationEl.dataset.visible === "true" &&
+    Boolean(tooltip.primaryTranslationEl.textContent?.trim());
+}
+
+function beginTranslationTransition(): boolean {
+  const shouldPreserve = hasVisibleTranslationContent();
+  tooltip.translationEl.dataset.transition = shouldPreserve ? "loading" : "idle";
+  return shouldPreserve;
+}
+
+async function animateTranslationSwap(applyResult: () => void | Promise<void>) {
+  const hadPreviousResult = hasVisibleTranslationContent();
+
+  if (hadPreviousResult) {
+    tooltip.translationEl.dataset.transition = "swap-out";
+    await waitForDelay(110);
+  }
+
+  await applyResult();
+
+  if (tooltip.translationEl.dataset.visible === "true") {
+    tooltip.translationEl.dataset.transition = "swap-in";
+    await waitForPaint();
+  }
+
+  tooltip.translationEl.dataset.transition = "idle";
 }
 
 function clearHighlights() {
@@ -2260,6 +2459,7 @@ function positionSentenceAnalysisPanel(rect: DOMRect) {
 
 function setWordTooltipControls(mode: "word" | "selection") {
   const isSelection = mode === "selection";
+  tooltip.wordView.dataset.layout = mode;
   tooltip.button.style.display = isSelection ? "none" : "inline-flex";
   tooltip.ignoreButton.style.display = isSelection ? "none" : "inline-flex";
   tooltip.metaEl.style.display = isSelection ? "none" : "flex";
@@ -2337,12 +2537,14 @@ function renderSelectionTooltip(
   tooltip.secondaryTranslationEl.textContent = result?.sentenceTranslation ?? "";
   tooltip.secondaryTranslationEl.dataset.visible = result?.sentenceTranslation ? "true" : "false";
   resetEnglishExplanationDisplay();
+  setTranslationPresentation("selection", result?.translation, result?.sentenceTranslation);
   tooltip.translationEl.dataset.visible = result?.translation ? "true" : "false";
   tooltip.hintEl.dataset.visible = "true";
   tooltip.hintEl.dataset.loading = "false";
+  tooltip.hintEl.dataset.kind = "status";
   tooltip.hintEl.textContent = result?.translationProvider === "deepseek-chat"
-    ? "已使用 LLM 翻译。"
-    : "默认 Google 结果，不满意可试试 LLM，或点长难句翻译。";
+    ? "已使用语境翻译。"
+    : "默认 Google 结果。";
   tooltip.rankEl.textContent = "";
   tooltip.host.style.display = "block";
   activeAnchorRect = context.rect;
@@ -2440,11 +2642,18 @@ function renderTooltip(result: LexiconLookupResult, rect: DOMRect) {
   if (result.englishExplanation) {
     showEnglishExplanation(result.englishExplanation);
   }
+  setTranslationPresentation(
+    "word",
+    result.translation,
+    result.sentenceTranslation,
+    result.englishExplanation,
+  );
   tooltip.translationEl.dataset.visible = result.translation ? "true" : "false";
   tooltip.hintEl.dataset.visible = result.translation ? "false" : "true";
   tooltip.hintEl.dataset.loading = "false";
   if (!result.translation) {
-    tooltip.hintEl.textContent = "默认使用 Google 翻译，不满意可切换到 LLM。";
+    tooltip.hintEl.dataset.kind = "prompt";
+    tooltip.hintEl.textContent = "可切换到语境翻译。";
     tooltip.secondaryTranslationEl.dataset.visible = "false";
   }
   tooltip.rankEl.textContent = rankLabel(result);
@@ -2662,15 +2871,20 @@ async function requestTranslation(provider: TranslationProviderChoice) {
   const requestContext = activeContext;
   activeTranslationRequestId += 1;
   const translationRequestId = activeTranslationRequestId;
+  const preservingPreviousResult = beginTranslationTransition();
 
-  tooltip.translationEl.dataset.visible = "false";
-  tooltip.primaryTranslationEl.textContent = "";
-  tooltip.secondaryTranslationEl.textContent = "";
-  tooltip.secondaryTranslationEl.dataset.visible = "false";
-  resetEnglishExplanationDisplay();
+  if (!preservingPreviousResult) {
+    tooltip.translationEl.dataset.visible = "false";
+    tooltip.translationEl.dataset.compact = "false";
+    tooltip.primaryTranslationEl.textContent = "";
+    tooltip.secondaryTranslationEl.textContent = "";
+    tooltip.secondaryTranslationEl.dataset.visible = "false";
+    resetEnglishExplanationDisplay();
+  }
   tooltip.hintEl.dataset.visible = "true";
   tooltip.hintEl.dataset.loading = "true";
-  tooltip.hintEl.textContent = provider === "llm" ? "LLM 翻译中..." : "Google 翻译中...";
+  tooltip.hintEl.dataset.kind = "status";
+  tooltip.hintEl.textContent = provider === "llm" ? "语境翻译中..." : "Google 翻译中...";
 
   let response: LookupWordResponse;
 
@@ -2695,7 +2909,9 @@ async function requestTranslation(provider: TranslationProviderChoice) {
 
   if (!response.ok || !response.result) {
     if (translationRequestId === activeTranslationRequestId) {
+      tooltip.translationEl.dataset.transition = "idle";
       tooltip.hintEl.dataset.loading = "false";
+      tooltip.hintEl.dataset.kind = "status";
       tooltip.hintEl.textContent = "翻译暂不可用。";
     }
     return;
@@ -2710,17 +2926,20 @@ async function requestTranslation(provider: TranslationProviderChoice) {
   }
 
   activeResult = response.result;
-  renderTooltip(response.result, requestContext.rect);
+  await animateTranslationSwap(() => {
+    renderTooltip(response.result, requestContext.rect);
+  });
   if (response.result.translationProvider) {
     const providerLabel =
-      response.result.translationProvider === "google-web" ? "Google" : "LLM";
+      response.result.translationProvider === "google-web" ? "Google" : "语境翻译";
     tooltip.hintEl.dataset.loading = "false";
+    tooltip.hintEl.dataset.kind = "status";
     tooltip.hintEl.textContent =
       providerLabel === "Google"
-        ? "默认 Google 结果，不满意可试试 LLM。"
+        ? "默认 Google 结果。"
         : response.result.englishExplanation
-          ? "已使用 LLM 翻译，并附带英英解释。"
-          : "已使用 LLM 翻译。";
+          ? "已使用语境翻译，并附带英英解释。"
+          : "已使用语境翻译。";
   }
 }
 
@@ -2735,11 +2954,19 @@ async function requestSelectionTranslation(
   activeSelectionTooltipContext = context;
   activeSelectionTranslationRequestId += 1;
   const translationRequestId = activeSelectionTranslationRequestId;
+  const preservingPreviousResult = beginTranslationTransition();
 
-  renderSelectionTooltip(context);
+  if (!preservingPreviousResult) {
+    renderSelectionTooltip(context);
+    tooltip.translationEl.dataset.compact = "false";
+  }
   tooltip.hintEl.dataset.loading = "true";
-  tooltip.hintEl.textContent = provider === "llm" ? "LLM 翻译中..." : "Google 翻译中...";
-  resetEnglishExplanationDisplay();
+  tooltip.hintEl.dataset.kind = "status";
+  tooltip.hintEl.textContent = provider === "llm" ? "语境翻译中..." : "Google 翻译中...";
+
+  if (!preservingPreviousResult) {
+    resetEnglishExplanationDisplay();
+  }
 
   let response: SelectionTranslationResponse;
 
@@ -2763,7 +2990,9 @@ async function requestSelectionTranslation(
 
   if (!response.ok || !response.result) {
     if (translationRequestId === activeSelectionTranslationRequestId) {
+      tooltip.translationEl.dataset.transition = "idle";
       tooltip.hintEl.dataset.loading = "false";
+      tooltip.hintEl.dataset.kind = "status";
       tooltip.hintEl.textContent = "翻译暂不可用。";
     }
     return;
@@ -2777,10 +3006,12 @@ async function requestSelectionTranslation(
     return;
   }
 
-  renderSelectionTooltip(context, {
-    translation: response.result.translation,
-    sentenceTranslation: response.result.sentenceTranslation,
-    translationProvider: response.result.translationProvider,
+  await animateTranslationSwap(() => {
+    renderSelectionTooltip(context, {
+      translation: response.result.translation,
+      sentenceTranslation: response.result.sentenceTranslation,
+      translationProvider: response.result.translationProvider,
+    });
   });
 }
 

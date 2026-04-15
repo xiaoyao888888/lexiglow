@@ -70,8 +70,8 @@ app.innerHTML = `
       <div class="search-results" id="searchResults"></div>
     </section>
     <section class="panel">
-      <h2>LLM 翻译设置</h2>
-      <p class="muted">页面默认先显示 Google 单词翻译；当你手动点 LLM 时，会结合句子语境给出更好的结果。你可以选择只显示单词释义，或额外显示整句翻译 / 英英解释。API Key 只保存在当前浏览器本地，不会进入 GitHub 仓库。</p>
+      <h2>语境翻译设置</h2>
+      <p class="muted">页面默认先显示 Google 单词翻译；当你手动点语境翻译时，会结合句子语境给出更好的结果。你可以选择只显示单词释义，或额外显示整句翻译 / 英英解释。API Key 只保存在当前浏览器本地，不会进入 GitHub 仓库。</p>
       <div class="rank-controls">
         <input id="providerBaseUrl" type="text" placeholder="Base URL" />
         <input id="providerModel" type="text" placeholder="Model" />
