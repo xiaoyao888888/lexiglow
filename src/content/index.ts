@@ -1,4 +1,7 @@
 import { lookupRank, resolveLookupLemma } from "../shared/lexicon";
+import {
+  getDisplayClauseBlocks,
+} from "../shared/sentenceAnalysisDisplay";
 import type {
   LookupWordResponse,
   PronunciationLookupResponse,
@@ -479,38 +482,49 @@ const TOOLTIP_STYLE = `
     margin-top: 8px;
   }
   .wordwise-clause-block {
-    display: inline-block;
+    display: inline;
     vertical-align: baseline;
-    padding: 1px 5px 2px;
-    border: 1.5px solid transparent;
-    border-radius: 999px;
-    margin: 1px 4px 3px 0;
+    padding: 0 0.22em 0.08em;
+    border: 0;
+    border-radius: 2px;
+    margin-right: 0.14em;
     white-space: normal;
     line-height: 1.45;
     color: #1f2a44;
+    background:
+      linear-gradient(
+        180deg,
+        transparent 0%,
+        transparent 18%,
+        var(--wordwise-marker-fill) 18%,
+        var(--wordwise-marker-fill) 82%,
+        transparent 83%,
+        transparent 100%
+      );
+    box-shadow:
+      inset 0 -1px 0 rgba(31, 42, 68, 0.015),
+      0 1px 2px rgba(255, 255, 255, 0.03);
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
   }
   .wordwise-clause-subblock {
-    display: inline-block;
+    display: inline;
     vertical-align: baseline;
-    padding: 0 4px 1px;
-    border-radius: 999px;
-    margin: 1px 3px 2px 0;
-    background: rgba(255, 255, 255, 0.22);
-    box-shadow: inset 0 0 0 1px rgba(31, 42, 68, 0.08);
+    padding: 0 0.1em 0.04em;
+    border-radius: 2px;
+    margin-right: 0.06em;
+    background: linear-gradient(180deg, transparent 28%, rgba(255, 255, 255, 0.04) 28%, rgba(255, 255, 255, 0.08) 72%, transparent 72%);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
   }
   .wordwise-clause-block--tone-0 {
-    background: #f8d2e7;
-    border-color: #eba5ca;
+    --wordwise-marker-fill: rgba(255, 91, 173, 0.2);
   }
   .wordwise-clause-block--tone-1 {
-    background: #d7f2cf;
-    border-color: #98d38f;
+    --wordwise-marker-fill: rgba(168, 255, 102, 0.18);
   }
   .wordwise-clause-block--tone-2 {
-    background: #f8efb6;
-    border-color: #e2d36a;
+    --wordwise-marker-fill: rgba(255, 238, 56, 0.2);
   }
   .wordwise-clause-block .wordwise-mark {
     background: transparent;
@@ -518,71 +532,113 @@ const TOOLTIP_STYLE = `
     padding: 0;
     color: inherit;
     font-weight: 800;
-    box-shadow: inset 0 -0.22em 0 rgba(59, 130, 246, 0.28);
+    box-shadow: inset 0 -0.26em 0 var(--wordwise-mark-underline-strong, rgba(29, 78, 216, 0.56));
   }
   .wordwise-clause-block .wordwise-mark--subject {
-    box-shadow: inset 0 -0.22em 0 rgba(59, 130, 246, 0.28);
+    box-shadow: inset 0 -0.26em 0 rgba(29, 78, 216, 0.56);
   }
   .wordwise-clause-block .wordwise-mark--predicate {
-    box-shadow: inset 0 -0.22em 0 rgba(249, 115, 22, 0.34);
+    box-shadow: inset 0 -0.26em 0 rgba(194, 65, 12, 0.56);
   }
   .wordwise-clause-block .wordwise-mark--nonfinite {
-    box-shadow: inset 0 -0.22em 0 rgba(168, 85, 247, 0.34);
+    box-shadow: inset 0 -0.26em 0 rgba(109, 40, 217, 0.56);
     font-weight: 900;
   }
   .wordwise-clause-block .wordwise-mark--conjunction {
-    box-shadow: inset 0 -0.22em 0 rgba(16, 185, 129, 0.32);
+    box-shadow: inset 0 -0.26em 0 rgba(63, 98, 18, 0.56);
   }
   .wordwise-clause-block .wordwise-mark--relative {
-    box-shadow: inset 0 -0.22em 0 rgba(236, 72, 153, 0.32);
+    box-shadow: inset 0 -0.26em 0 rgba(67, 56, 202, 0.56);
   }
   .wordwise-clause-block .wordwise-mark--preposition {
-    box-shadow: inset 0 -0.22em 0 rgba(14, 165, 233, 0.3);
+    box-shadow: inset 0 -0.26em 0 rgba(14, 116, 144, 0.56);
     font-weight: 700;
   }
   .wordwise-analysis-pill {
     display: inline-flex;
     align-items: center;
-    border-radius: 999px;
-    padding: 4px 8px;
+    position: relative;
+    isolation: isolate;
+    padding: 1px 7px 3px;
+    border-radius: 2px;
     font-size: 12px;
     font-weight: 600;
+  }
+  .wordwise-analysis-pill::before {
+    content: "";
+    position: absolute;
+    inset: 0 -3px;
+    z-index: -1;
+    opacity: 0.62;
+    background:
+      linear-gradient(180deg, transparent 21%, var(--wordwise-pill-fill) 21%, var(--wordwise-pill-fill) 79%, transparent 79%);
+    box-shadow: inset 0 -1px 0 rgba(31, 42, 68, 0.02);
   }
   .wordwise-mark {
     padding: 1px 4px;
     border-radius: 6px;
     font-weight: 700;
+    box-shadow: inset 0 -0.16em 0 var(--wordwise-mark-underline, rgba(29, 78, 216, 0.44));
   }
-  .wordwise-mark--subject,
-  .wordwise-pill--subject {
+  .wordwise-mark--subject {
     background: rgba(59, 130, 246, 0.16);
     color: #1d4ed8;
+    --wordwise-mark-underline: rgba(29, 78, 216, 0.46);
+    --wordwise-mark-underline-strong: rgba(29, 78, 216, 0.56);
   }
-  .wordwise-mark--predicate,
-  .wordwise-pill--predicate {
+  .wordwise-pill--subject {
+    --wordwise-pill-fill: rgba(59, 130, 246, 0.08);
+    color: #1d4ed8;
+  }
+  .wordwise-mark--predicate {
     background: rgba(249, 115, 22, 0.16);
     color: #c2410c;
+    --wordwise-mark-underline: rgba(194, 65, 12, 0.46);
+    --wordwise-mark-underline-strong: rgba(194, 65, 12, 0.56);
   }
-  .wordwise-mark--nonfinite,
-  .wordwise-pill--nonfinite {
-    background: rgba(168, 85, 247, 0.22);
+  .wordwise-pill--predicate {
+    --wordwise-pill-fill: rgba(249, 115, 22, 0.08);
+    color: #c2410c;
+  }
+  .wordwise-mark--nonfinite {
+    background: rgba(139, 92, 246, 0.2);
     color: #6d28d9;
-    box-shadow: inset 0 -1px 0 rgba(109, 40, 217, 0.16);
+    --wordwise-mark-underline: rgba(109, 40, 217, 0.46);
+    --wordwise-mark-underline-strong: rgba(109, 40, 217, 0.56);
   }
-  .wordwise-mark--conjunction,
+  .wordwise-pill--nonfinite {
+    --wordwise-pill-fill: rgba(168, 85, 247, 0.1);
+    color: #6d28d9;
+  }
+  .wordwise-mark--conjunction {
+    background: rgba(190, 242, 100, 0.18);
+    color: #3f6212;
+    --wordwise-mark-underline: rgba(63, 98, 18, 0.46);
+    --wordwise-mark-underline-strong: rgba(63, 98, 18, 0.56);
+  }
   .wordwise-pill--conjunction {
-    background: rgba(16, 185, 129, 0.18);
-    color: #047857;
+    --wordwise-pill-fill: rgba(190, 242, 100, 0.1);
+    color: #3f6212;
   }
-  .wordwise-mark--relative,
+  .wordwise-mark--relative {
+    background: rgba(129, 140, 248, 0.18);
+    color: #4338ca;
+    --wordwise-mark-underline: rgba(67, 56, 202, 0.46);
+    --wordwise-mark-underline-strong: rgba(67, 56, 202, 0.56);
+  }
   .wordwise-pill--relative {
-    background: rgba(236, 72, 153, 0.16);
-    color: #be185d;
+    --wordwise-pill-fill: rgba(129, 140, 248, 0.12);
+    color: #4338ca;
   }
-  .wordwise-mark--preposition,
+  .wordwise-mark--preposition {
+    background: rgba(34, 211, 238, 0.16);
+    color: #0e7490;
+    --wordwise-mark-underline: rgba(14, 116, 144, 0.46);
+    --wordwise-mark-underline-strong: rgba(14, 116, 144, 0.56);
+  }
   .wordwise-pill--preposition {
-    background: rgba(14, 165, 233, 0.16);
-    color: #0369a1;
+    --wordwise-pill-fill: rgba(34, 211, 238, 0.1);
+    color: #0e7490;
   }
   @keyframes wordwise-fade {
     0%, 100% { opacity: 0.35; }
@@ -711,11 +767,6 @@ interface HighlightSegment {
   end: number;
 }
 
-const REVIEWABLE_PREPOSITIONS = new Set([
-  "of", "in", "on", "at", "by", "for", "with", "from", "about", "between", "among",
-  "over", "under", "into", "onto", "through", "across", "around",
-]);
-
 function getHighlightSegments(surface: string, start: number): HighlightSegment[] {
   if (!surface.includes("-")) {
     return [{ surface, start, end: start + surface.length }];
@@ -780,11 +831,6 @@ interface SentenceWordToken {
   end: number;
 }
 
-interface MatchedSentenceClauseBlock extends SentenceClauseBlock {
-  start: number;
-  end: number;
-}
-
 function tokenizeSentenceWords(sentence: string): SentenceWordToken[] {
   const tokens: SentenceWordToken[] = [];
   const regex = createEnglishTokenMatcher();
@@ -806,121 +852,6 @@ function tokenizeSentenceWords(sentence: string): SentenceWordToken[] {
   }
 
   return tokens;
-}
-
-function matchClauseBlocks(
-  sentence: string,
-  blocks: SentenceClauseBlock[],
-): MatchedSentenceClauseBlock[] {
-  const matchedBlocks: MatchedSentenceClauseBlock[] = [];
-  let cursor = 0;
-
-  for (const block of blocks) {
-    const text = block.text.trim();
-
-    if (!text) {
-      continue;
-    }
-
-    const start = sentence.indexOf(text, cursor);
-
-    if (start < 0) {
-      continue;
-    }
-
-    matchedBlocks.push({
-      ...block,
-      start,
-      end: start + text.length,
-    });
-    cursor = start + text.length;
-  }
-
-  return matchedBlocks;
-}
-
-function mergeDisplayClauseBlocks(
-  sentence: string,
-  blocks: MatchedSentenceClauseBlock[],
-): MatchedSentenceClauseBlock[] {
-  if (blocks.length < 2) {
-    return blocks;
-  }
-
-  const merged: MatchedSentenceClauseBlock[] = [];
-  let index = 0;
-
-  while (index < blocks.length) {
-    const current = blocks[index];
-    const next = blocks[index + 1];
-    const currentText = current.text.trim().toLowerCase();
-    const currentWords = currentText.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
-
-    if (
-      next &&
-      currentWords.length === 1 &&
-      REVIEWABLE_PREPOSITIONS.has(currentWords[0]) &&
-      /^[\s,;:()]*$/.test(sentence.slice(current.end, next.start))
-    ) {
-      merged.push({
-        ...next,
-        start: current.start,
-        text: sentence.slice(current.start, next.end),
-      });
-      index += 2;
-      continue;
-    }
-
-    merged.push(current);
-    index += 1;
-  }
-
-  return merged;
-}
-
-function splitDisplayClauseBlocks(
-  sentence: string,
-  blocks: MatchedSentenceClauseBlock[],
-): MatchedSentenceClauseBlock[] {
-  const refined: MatchedSentenceClauseBlock[] = [];
-  const branchPattern =
-    /\b(of|in|with|by|through|over|under|for|from|on|at|to)\s+(what|which|who|whom|whose|where|when|how|whether|why)\b/i;
-
-  for (const block of blocks) {
-    const blockText = sentence.slice(block.start, block.end);
-    const match = branchPattern.exec(blockText);
-
-    if (!match || match.index < 0) {
-      refined.push(block);
-      continue;
-    }
-
-    const splitStart = block.start + match.index;
-    const prefixText = sentence.slice(block.start, splitStart).trim();
-    const branchText = sentence.slice(splitStart, block.end).trim();
-    const prefixWords = prefixText.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
-    const branchWords = branchText.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
-
-    if (prefixWords.length < 3 || branchWords.length < 3) {
-      refined.push(block);
-      continue;
-    }
-
-    refined.push({
-      ...block,
-      text: sentence.slice(block.start, splitStart).replace(/\s+$/u, ""),
-      start: block.start,
-      end: splitStart,
-    });
-    refined.push({
-      ...block,
-      text: sentence.slice(splitStart, block.end).replace(/^\s+/u, ""),
-      start: splitStart,
-      end: block.end,
-    });
-  }
-
-  return refined;
 }
 
 function assignFirstMatchingToken(
@@ -1090,7 +1021,10 @@ function renderClauseBlockContent(
 }
 
 function formatAnalysisStepMarkup(step: string): string {
-  const trimmed = step.trim();
+  const trimmed = step
+    .trim()
+    .replace(/^(?:step\s*)?\d+[\.\)）:：-]\s*/iu, "")
+    .replace(/^第\s*\d+\s*步[\s:：-]*/u, "");
   const subStepPattern = /(?:^|\s)(\d+[\)）])/g;
   const markers = [...trimmed.matchAll(subStepPattern)];
 
@@ -1157,13 +1091,7 @@ function renderSentenceWithClauseBlocks(
 
   const tokens = tokenizeSentenceWords(sentence);
   const assignments = buildHighlightAssignments(result, sentence);
-  const displayBlocks = splitDisplayClauseBlocks(
-    sentence,
-    mergeDisplayClauseBlocks(
-      sentence,
-      matchClauseBlocks(sentence, result.clauseBlocks),
-    ),
-  );
+  const displayBlocks = getDisplayClauseBlocks(sentence, result.clauseBlocks);
 
   let cursor = 0;
   let matchedCount = 0;
@@ -1370,13 +1298,12 @@ function createTooltipRoot() {
   analysisLoadingEl.className = "wordwise-analysis-loading";
   analysisLoadingEl.dataset.visible = "false";
   analysisLoadingEl.innerHTML = `
-    <div class="wordwise-analysis-loading-title">正在按五步法拆句并顺译，请稍等</div>
+    <div class="wordwise-analysis-loading-title">正在按四步法拆句并顺译，请稍等</div>
     <div class="wordwise-analysis-loading-steps">
       <div class="wordwise-analysis-loading-step">1. 正在切层次，先找连接标志和关系词</div>
       <div class="wordwise-analysis-loading-step">2. 正在抓主干，定位主句主语和谓语</div>
-      <div class="wordwise-analysis-loading-step">3. 正在拆枝叶，整理从句、修饰和并列层次</div>
-      <div class="wordwise-analysis-loading-step">4. 正在定位非谓语并理清逻辑关系</div>
-      <div class="wordwise-analysis-loading-step">5. 正在顺译，组织自然的中文表达</div>
+      <div class="wordwise-analysis-loading-step">3. 正在梳理修饰、非谓语和逻辑挂靠关系</div>
+      <div class="wordwise-analysis-loading-step">4. 正在顺译，组织自然的中文表达</div>
     </div>
   `;
 
@@ -1986,7 +1913,7 @@ function showSentenceAnalysisButton(context: SentenceSelectionContext) {
   tooltip.analysisTriggerButton.style.display = "inline-flex";
   tooltip.analysisTriggerButton.textContent = "开始分析";
   tooltip.analysisStatusEl.dataset.loading = "false";
-  tooltip.analysisStatusEl.textContent = "按五步法：先切层次，再抓主干，再拆枝叶，再看非谓语和逻辑，最后按中文译序顺译。";
+  tooltip.analysisStatusEl.textContent = "按四步法：先切层次，再抓主干，再把修饰、非谓语和逻辑关系一起理顺，最后按中文译序顺译。";
   tooltip.analysisLoadingEl.dataset.visible = "false";
   tooltip.analysisSourceEl.textContent = context.text;
   tooltip.analysisLegendEl.innerHTML = "";
@@ -2087,7 +2014,7 @@ function renderSentenceAnalysisPanel(
   tooltip.closeButton.dataset.visible = "true";
   tooltip.analysisTitleEl.textContent = "长难句分析";
   tooltip.analysisTriggerButton.style.display = "none";
-  tooltip.analysisStatusEl.textContent = "五步法：先找连接标志切层次，再抓主句主干，再拆枝叶，再看非谓语和逻辑关系，最后按中文译序顺译。";
+  tooltip.analysisStatusEl.textContent = "四步法：先找连接标志切层次，再抓主句主干，再把修饰、非谓语和逻辑关系一起理顺，最后按中文译序顺译。";
   tooltip.analysisStatusEl.dataset.loading = "false";
   tooltip.analysisLoadingEl.dataset.visible = "false";
   tooltip.analysisSourceEl.innerHTML = renderSentenceWithClauseBlocks(result, context.text);

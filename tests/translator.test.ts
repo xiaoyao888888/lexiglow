@@ -7,6 +7,7 @@ import {
   parseSentenceAnalysisResponse,
   sanitizeTranslatorSettings,
 } from "../src/shared/translator";
+import { getDisplayClauseBlocks } from "../src/shared/sentenceAnalysisDisplay";
 
 describe("google response parsing", () => {
   test("joins translation segments", () => {
@@ -198,6 +199,32 @@ describe("sentence analysis parsing", () => {
     });
   });
 
+  test("preserves model-selected conjunction highlights without parser-side reclassification", () => {
+    expect(
+      parseSentenceAnalysisResponse(
+        '{"translation":"目前，开发重点是调优预训练阶段。","structure":"the focus is tuning.","analysisSteps":["先看句首状语。","再抓主干。","再看后置修饰。","再看非谓语。","最后顺译。"],"highlights":[{"text":"Presently","category":"conjunction"},{"text":"is","category":"predicate"},{"text":"tuning","category":"nonfinite"},{"text":"which","category":"relative"}],"clauseBlocks":[{"text":"Presently, the main focus of development is on tuning the pretraining stage,","type":"main"},{"text":"which takes the most amount of compute.","type":"relative"}]}',
+      ),
+    ).toEqual({
+      translation: "目前，开发重点是调优预训练阶段。",
+      structure: "the focus is tuning.",
+      analysisSteps: ["先看句首状语。", "再抓主干。", "再看后置修饰。", "再看非谓语。", "最后顺译。"],
+      highlights: [
+        { text: "Presently", category: "conjunction" },
+        { text: "is", category: "predicate" },
+        { text: "tuning", category: "nonfinite" },
+        { text: "which", category: "relative" },
+      ],
+      clauseBlocks: [
+        {
+          text: "Presently, the main focus of development is on tuning the pretraining stage,",
+          type: "main",
+          label: undefined,
+        },
+        { text: "which takes the most amount of compute.", type: "relative", label: undefined },
+      ],
+    });
+  });
+
   test("repairs common missing-comma issues in sentence analysis json", () => {
     expect(
       parseSentenceAnalysisResponse(
@@ -218,5 +245,19 @@ describe("sentence analysis parsing", () => {
         { text: "that had substantial LLM contribution", type: "relative", label: undefined },
       ],
     });
+  });
+
+  test("keeps commas attached to the preceding clause in display blocks for real analysis text", () => {
+    const sentence =
+      "It is designed to run on a single GPU node, the code is minimal/hackable, and it covers all major LLM stages including tokenization, pretraining, finetuning, evaluation, inference, and a chat UI.";
+    const parsed = parseSentenceAnalysisResponse(
+      '{"translation":"它被设计为在单个 GPU 节点上运行，代码保持最小化且便于修改，并覆盖了包括分词、预训练、微调、评估、推理和聊天界面在内的主要 LLM 阶段。","structure":"It is designed, the code is minimal, and it covers stages.","analysisSteps":["先按逗号和 and 切出三个并列层次。","主干是 It is designed / the code is / it covers 三个并列判断。","including 引出的部分补充说明 covers 的具体范围。","run 是 is designed 的补足成分，说明设计用途。","中文先顺着三个并列分句译出，再补上 including 的列举内容。"],"highlights":["predicate|||designed","predicate|||is","conjunction|||and","predicate|||covers","nonfinite|||including"],"clauseBlocks":["main|||It is designed to run on a single GPU node","main|||the code is minimal/hackable","parallel|||and it covers all major LLM stages including tokenization, pretraining, finetuning, evaluation, inference, and a chat UI."]}',
+    );
+
+    expect(getDisplayClauseBlocks(sentence, parsed.clauseBlocks).map((block) => block.text)).toEqual([
+      "It is designed to run on a single GPU node,",
+      "the code is minimal/hackable,",
+      "and it covers all major LLM stages including tokenization, pretraining, finetuning, evaluation, inference, and a chat UI.",
+    ]);
   });
 });

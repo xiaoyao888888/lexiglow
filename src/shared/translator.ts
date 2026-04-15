@@ -535,7 +535,7 @@ async function requestSentenceAnalysis({
   const body = {
     model,
     temperature: 0.1,
-    max_tokens: 500,
+    max_tokens: 1000,
     response_format: {
       type: "json_object",
     },
@@ -984,8 +984,37 @@ export async function analyzeSentenceWithLlm({
 
   const endpoint = `${settings.providerBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const sentence = trimContext(text);
-  const analysisPrompt =
-    'You are an English sentence analysis tutor for Chinese students. Follow a practical five-step method whose purpose is translation, not abstract grammar talk. Every explanation must help the learner understand how structure affects meaning and how Chinese word order should be adjusted. Keep the wording concrete and useful. Return strict compact JSON only with keys: translation, structure, analysisSteps, highlights, clauseBlocks. translation must be one polished Chinese sentence for the whole English sentence. It must be faithful, precise, and natural Chinese for technical reading, not a word-for-word literal translation. Prefer established Chinese technical phrasing when appropriate, and reorganize word order when needed so the sentence reads like good Chinese while preserving the original meaning. structure must be one short English backbone sentence with branches removed, keeping only the core clause skeleton rather than giving a Chinese explanation. analysisSteps must be an array of exactly 5 short Chinese sentences in this order: 1) cut the sentence into layers by connectors, punctuation, clauses, coordination, and nonfinite structures, 2) identify the main clause subject, predicate, object or complement, and state the core meaning, 3) explain what each important modifier, clause, complement, or parallel part modifies or explains, and name its attachment target clearly, 4) explain key nonfinite forms by form, voice, logical subject, and function such as purpose or result, and summarize the main logical relation such as cause, contrast, condition, or coordination, 5) explain the Chinese translation order first and then support the final translation. The five steps should serve translation, avoid empty jargon, and focus on how structure changes understanding and translation order. highlights must be an array of 3 to 6 strings in the format "<category>|||<exact single word from sentence>". Allowed categories are [subject, predicate, nonfinite, conjunction, relative, preposition]. Choose only structural signal words, not content words. Never highlight possessive determiners or simple pronouns like my, your, his, her, its, our, their, it, they, them, this, these, those. Never highlight plain "that" when it is only a determiner such as "that data". clauseBlocks must be an array of 2 to 6 strings in the format "<type>|||<exact original text chunk>". Allowed types are [main, relative, subordinate, nonfinite, parallel, modifier]. The clauseBlocks must together cover the whole sentence from first word to last word with no missing words and no overlap. Split long parts at commas, relative words, subordinators, coordinators, or nonfinite markers when that makes the structure clearer, but do not isolate a bare preposition by itself. Output must be valid JSON parsable by JSON.parse. Do not include markdown fences. Do not include extra commentary outside the JSON object.';
+  const analysisPrompt = [
+    "You are an English sentence analysis tutor for Chinese learners.",
+    "Your goal is to support accurate translation, not abstract grammar discussion.",
+    "Every explanation must show how structure affects meaning and Chinese word order.",
+    "Keep the wording concrete, useful, and easy to review.",
+    "",
+    "Return strict compact JSON only with these keys:",
+    "translation, structure, analysisSteps, highlights, clauseBlocks",
+    "",
+    "Field requirements:",
+    '1. translation: output one polished Chinese sentence for the whole English sentence. It must be faithful, precise, natural, and suitable for technical reading. Do not translate word by word. Prefer established Chinese technical wording when appropriate.',
+    '2. structure: output one short English backbone sentence with branches removed. Keep only the clause skeleton, not a Chinese explanation. Do not copy the whole original sentence. Do not include sentence-opening adverbs such as presently or currently. Do not keep long modifier chains, relative clauses, subordinate clauses, participial branches, or prepositional detail that is not part of the skeleton. Keep only backbone subject + predicate + object/complement, or at most two backbone clauses if there is true top-level coordination. Keep each backbone clause within about 200 English words. If structure is close to the full sentence, it is wrong.',
+    "3. analysisSteps: output exactly 4 Chinese sentences in this order:",
+    "   Step 1: cut the sentence into layers by connectors, punctuation, clauses, coordination, and nonfinite structures.",
+    "   Step 2: identify the main clause subject, predicate, object or complement, and state the core meaning.",
+    "   Step 3: explain logical groups, clauses, nonfinite phrases, modifiers, and what each part modifies.",
+    "   Step 4: explain the Chinese translation order first and then support the final translation.",
+    "   Each analysis step must stay within 500 Chinese characters.",
+    "4. highlights: output 5 to 8 strings in the format <category>|||<exact single word from sentence>. Allowed categories are [subject, predicate, nonfinite, conjunction, relative, preposition]. Choose structural signal words rather than ordinary content words. For medium or long sentences, prefer 6 to 8 highlights when possible. Each highlight must use the category that best matches the word's grammatical role in this sentence.",
+    "   For conjunction, use only true connectors or subordinators such as and, but, although, because, if, while, when, since, whether. Do not use sentence adverbs or discourse markers such as presently, currently, now, overall, generally.",
+    "   For relative, use only real relative words such as which, who, whom, whose, where, when, why, or that when it truly introduces a clause.",
+    "   Never highlight possessive determiners or simple pronouns such as my, your, his, her, its, our, their, it, they, them, this, these, those.",
+    '   Never highlight plain "that" when it is only a determiner, for example in "that data".',
+    "5. clauseBlocks: output 2 to 6 strings in the format <type>|||<exact original text chunk>. Allowed types are [main, relative, subordinate, nonfinite, parallel, modifier]. The clauseBlocks must cover the whole sentence from first word to last word with no missing words and no overlap. Split long parts at commas, relative words, subordinators, coordinators, or nonfinite markers when that improves clarity, but do not isolate a bare preposition by itself.",
+    "",
+    "Final rules:",
+    "The four steps must serve translation, avoid empty jargon, and focus on how structure changes understanding and translation order.",
+    "The output must be valid JSON parsable by JSON.parse.",
+    "Do not include markdown fences.",
+    "Do not include any commentary outside the JSON object.",
+  ].join("\n");
 
   try {
     const result = await requestSentenceAnalysis({
