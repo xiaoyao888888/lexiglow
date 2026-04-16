@@ -14,12 +14,30 @@ import type {
 } from "./types";
 
 export const DEFAULT_TRANSLATOR_SETTINGS: TranslatorSettings = {
-  providerBaseUrl: "https://api.deepseek.com/v1",
-  providerModel: "deepseek-chat",
+  llmProvider: "openai",
+  providerBaseUrl: "https://api.openai.com/v1",
+  providerModel: "gpt-4.1-mini",
   apiKey: "",
   fallbackToGoogle: true,
   llmDisplayMode: "word",
+  cacheDurationValue: 30,
+  cacheDurationUnit: "minutes",
 };
+
+const LLM_PROVIDER_DEFAULTS = {
+  openai: {
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4.1-mini",
+  },
+  gemini: {
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    model: "gemini-2.5-flash",
+  },
+  claude: {
+    baseUrl: "https://api.anthropic.com/v1",
+    model: "claude-sonnet-4-20250514",
+  },
+} as const;
 
 const WORD_TRANSLATION_REQUEST_TIMEOUT_MS = 8000;
 const SELECTION_TRANSLATION_REQUEST_TIMEOUT_MS = 10000;
@@ -28,6 +46,14 @@ const SENTENCE_ANALYSIS_REQUEST_TIMEOUT_MS = 20000;
 function trimContext(contextText: string): string {
   const compact = contextText.replace(/\s+/g, " ").trim();
   return compact.length > 220 ? `${compact.slice(0, 217)}...` : compact;
+}
+
+export function getDefaultLlmBaseUrl(provider: TranslatorSettings["llmProvider"]): string {
+  return LLM_PROVIDER_DEFAULTS[provider].baseUrl;
+}
+
+export function getDefaultLlmModel(provider: TranslatorSettings["llmProvider"]): string {
+  return LLM_PROVIDER_DEFAULTS[provider].model;
 }
 
 async function fetchWithTimeout(
@@ -56,6 +82,16 @@ async function fetchWithTimeout(
   }
 }
 
+class LlmRequestError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "LlmRequestError";
+    this.status = status;
+  }
+}
+
 function cleanModelOutput(text: string): string {
   return text.trim().replace(/^["'`\s]+|["'`\s]+$/g, "");
 }
@@ -77,6 +113,260 @@ function readLlmError(payload: unknown): string {
   }
 
   return "";
+}
+
+function readOpenAiContent(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const choices = (payload as { choices?: Array<{ message?: { content?: unknown } }> }).choices;
+  const content = choices?.[0]?.message?.content;
+
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") {
+        return "";
+      }
+
+      return typeof (part as { text?: unknown }).text === "string"
+        ? (part as { text: string }).text
+        : "";
+    })
+    .filter(Boolean)
+    .join("");
+}
+
+function readGeminiContent(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const candidates = (payload as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }>;
+  }).candidates;
+  const parts = candidates?.[0]?.content?.parts ?? [];
+
+  return parts
+    .map((part) => (typeof part?.text === "string" ? part.text : ""))
+    .filter(Boolean)
+    .join("");
+}
+
+function readClaudeContent(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const content = (payload as {
+    content?: Array<{ type?: unknown; text?: unknown }>;
+  }).content ?? [];
+
+  return content
+    .map((block) => (
+      block?.type === "text" && typeof block?.text === "string"
+        ? block.text
+        : ""
+    ))
+    .filter(Boolean)
+    .join("");
+}
+
+function readOpenAiFinishReason(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const choices = (payload as { choices?: Array<{ finish_reason?: unknown }> }).choices;
+  return typeof choices?.[0]?.finish_reason === "string" ? choices[0].finish_reason : "";
+}
+
+function readGeminiFinishReason(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const candidates = (payload as { candidates?: Array<{ finishReason?: unknown }> }).candidates;
+  return typeof candidates?.[0]?.finishReason === "string" ? candidates[0].finishReason : "";
+}
+
+function readClaudeFinishReason(payload: unknown): string {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  return typeof (payload as { stop_reason?: unknown }).stop_reason === "string"
+    ? (payload as { stop_reason: string }).stop_reason
+    : "";
+}
+
+function getLlmProviderTag(): string {
+  return "llm";
+}
+
+export function getLlmCacheSignature(settings: Pick<
+  TranslatorSettings,
+  "llmProvider" | "providerBaseUrl" | "providerModel"
+>): string {
+  return [
+    settings.llmProvider,
+    settings.providerBaseUrl.trim().replace(/\/+$/, ""),
+    settings.providerModel.trim(),
+  ].join("::");
+}
+
+function isMaxTokenFinishReason(finishReason: string): boolean {
+  const normalized = finishReason.trim().toLowerCase();
+  return normalized === "length" || normalized === "max_tokens" || normalized === "max tokens";
+}
+
+function resolveLlmEndpoint(settings: TranslatorSettings): string {
+  const baseUrl = settings.providerBaseUrl.replace(/\/+$/, "");
+
+  switch (settings.llmProvider) {
+    case "gemini":
+      return `${baseUrl}/models/${encodeURIComponent(settings.providerModel)}:generateContent`;
+    case "claude":
+      return `${baseUrl}/messages`;
+    case "openai":
+      return `${baseUrl}/chat/completions`;
+  }
+}
+
+async function requestLlmText({
+  settings,
+  systemPrompt,
+  userPrompt,
+  temperature,
+  maxTokens,
+  timeoutMs,
+  preferJson,
+}: {
+  settings: TranslatorSettings;
+  systemPrompt: string;
+  userPrompt: string;
+  temperature: number;
+  maxTokens: number;
+  timeoutMs: number;
+  preferJson?: boolean;
+}): Promise<{ content: string; finishReason: string; payload: unknown; response: Response }> {
+  const endpoint = resolveLlmEndpoint(settings);
+
+  let init: RequestInit;
+
+  switch (settings.llmProvider) {
+    case "gemini":
+      init = {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": settings.apiKey,
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: systemPrompt }],
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: userPrompt }],
+            },
+          ],
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+            ...(preferJson ? { responseMimeType: "application/json" } : {}),
+          },
+        }),
+      };
+      break;
+    case "claude":
+      init = {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: settings.providerModel,
+          system: systemPrompt,
+          temperature,
+          max_tokens: maxTokens,
+          messages: [
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+        }),
+      };
+      break;
+    case "openai":
+      init = {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${settings.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: settings.providerModel,
+          temperature,
+          max_tokens: maxTokens,
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+        }),
+      };
+      break;
+  }
+
+  const response = await fetchWithTimeout(endpoint, init, timeoutMs);
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message = readLlmError(payload);
+    throw new LlmRequestError(message || `LLM request failed: ${response.status}`, response.status);
+  }
+
+  switch (settings.llmProvider) {
+    case "gemini":
+      return {
+        content: readGeminiContent(payload),
+        finishReason: readGeminiFinishReason(payload),
+        payload,
+        response,
+      };
+    case "claude":
+      return {
+        content: readClaudeContent(payload),
+        finishReason: readClaudeFinishReason(payload),
+        payload,
+        response,
+      };
+    case "openai":
+      return {
+        content: readOpenAiContent(payload),
+        finishReason: readOpenAiFinishReason(payload),
+        payload,
+        response,
+      };
+  }
 }
 
 function shouldFallbackToGoogle(status: number, message: string): boolean {
@@ -741,66 +1031,40 @@ function sentenceAnalysisNeedsRetry(
 }
 
 async function requestSentenceAnalysis({
-  endpoint,
-  apiKey,
-  model,
+  settings,
   sentence,
   systemPrompt,
 }: {
-  endpoint: string;
-  apiKey: string;
-  model: string;
+  settings: TranslatorSettings;
   sentence: string;
   systemPrompt: string;
 }): Promise<Omit<SentenceAnalysisResult, "provider" | "cached">> {
-  const body = {
-    model,
-    temperature: 0.1,
-    max_tokens: 1000,
-    response_format: {
-      type: "json_object",
-    },
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      {
-        role: "user",
-        content: `sentence: ${sentence}`,
-      },
-    ],
-  };
+  let llmResult: { content: string; finishReason: string; payload: unknown; response: Response };
 
-  const response = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, SENTENCE_ANALYSIS_REQUEST_TIMEOUT_MS);
-
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-        error?: { message?: string };
-      }
-    | null;
-  const finishReason = payload?.choices?.[0]?.finish_reason ?? "";
-
-  if (!response.ok) {
-    const message = readLlmError(payload);
-    throw new SentenceAnalysisRequestError(message || `LLM analysis request failed: ${response.status}`, {
-      status: response.status,
-      responseText: payload?.choices?.[0]?.message?.content ?? JSON.stringify(payload ?? "").slice(0, 1600),
-      stage: "single-shot",
+  try {
+    llmResult = await requestLlmText({
+      settings,
+      systemPrompt,
+      userPrompt: `sentence: ${sentence}`,
+      temperature: 0.1,
+      maxTokens: 1000,
+      timeoutMs: SENTENCE_ANALYSIS_REQUEST_TIMEOUT_MS,
+      preferJson: true,
     });
+  } catch (error) {
+    throw new SentenceAnalysisRequestError(
+      error instanceof Error ? error.message : "LLM analysis request failed.",
+      {
+        status: error instanceof LlmRequestError ? error.status : undefined,
+        responseText: "",
+        stage: "single-shot",
+      },
+    );
   }
 
-  const content = payload?.choices?.[0]?.message?.content ?? "";
+  const { content, finishReason, payload, response } = llmResult;
 
-  if (finishReason === "length") {
+  if (isMaxTokenFinishReason(finishReason)) {
     throw new SentenceAnalysisRequestError("Sentence analysis response was truncated by max tokens.", {
       status: response.status,
       responseText: content.slice(0, 1600),
@@ -909,51 +1173,22 @@ async function requestEnglishExplanation({
   userSettings: UserSettings;
   stricterPrompt?: string;
 }): Promise<{ meaning: string; explanation: string }> {
-  const endpoint = `${settings.providerBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const knownCount = countTotalKnown(userSettings);
   const learnerLevel = estimateLearnerLevel(userSettings);
-  const body = {
-    model: settings.providerModel,
+  const { content } = await requestLlmText({
+    settings,
+    systemPrompt:
+      `${buildLearnerLevelInstruction(learnerLevel, knownCount)} ` +
+      'You explain English words to Chinese learners. First identify the exact Chinese meaning of the target word in the given sentence context. Then write exactly one short English sentence that explains the word in that context. Use simple, common English. Avoid advanced synonyms, long clauses, and dictionary jargon. Avoid using the target word or its inflections in the explanation unless absolutely necessary. Return strict JSON only: {"meaning":"<precise Chinese meaning in context>","explanation":"<one short easy English sentence>"}. No markdown, no extra text.',
+    userPrompt: stricterPrompt
+      ? `word: ${surface}\nsentence: ${sentence}\nextra rule: ${stricterPrompt}`
+      : `word: ${surface}\nsentence: ${sentence}`,
     temperature: 0.2,
-    max_tokens: 140,
-    messages: [
-      {
-        role: "system",
-        content:
-          `${buildLearnerLevelInstruction(learnerLevel, knownCount)} ` +
-          'You explain English words to Chinese learners. First identify the exact Chinese meaning of the target word in the given sentence context. Then write exactly one short English sentence that explains the word in that context. Use simple, common English. Avoid advanced synonyms, long clauses, and dictionary jargon. Avoid using the target word or its inflections in the explanation unless absolutely necessary. Return strict JSON only: {"meaning":"<precise Chinese meaning in context>","explanation":"<one short easy English sentence>"}. No markdown, no extra text.',
-      },
-      {
-        role: "user",
-        content: stricterPrompt
-          ? `word: ${surface}\nsentence: ${sentence}\nextra rule: ${stricterPrompt}`
-          : `word: ${surface}\nsentence: ${sentence}`,
-      },
-    ],
-  };
+    maxTokens: 140,
+    timeoutMs: WORD_TRANSLATION_REQUEST_TIMEOUT_MS,
+    preferJson: true,
+  });
 
-  const response = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, WORD_TRANSLATION_REQUEST_TIMEOUT_MS);
-
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        choices?: Array<{ message?: { content?: string } }>;
-        error?: { message?: string };
-      }
-    | null;
-
-  if (!response.ok) {
-    const message = readLlmError(payload);
-    throw new Error(message || `LLM explanation request failed: ${response.status}`);
-  }
-
-  const content = payload?.choices?.[0]?.message?.content ?? "";
   return parseEnglishExplanationResponse(content);
 }
 
@@ -1001,7 +1236,7 @@ export async function explainWordInEnglishWithLlm({
   return {
     meaning: finalResult.meaning,
     explanation: finalResult.explanation,
-    provider: "deepseek-chat",
+    provider: getLlmProviderTag(),
     cached: false,
   };
 }
@@ -1023,60 +1258,38 @@ export async function translateWithLlm({
     throw new TranslatorFallbackError("Missing LLM API key.");
   }
 
-  const endpoint = `${settings.providerBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const sentence = trimContext(contextText || surface);
   const mode = responseMode ?? settings.llmDisplayMode;
   const needsSentence = mode === "sentence";
   const needsEnglishExplanation = mode === "english";
   const knownCount = userSettings ? countTotalKnown(userSettings) : 0;
   const learnerLevel = userSettings ? estimateLearnerLevel(userSettings) : "A2";
-  const body = {
-    model: settings.providerModel,
-    temperature: 0,
-    max_tokens: needsEnglishExplanation ? 140 : needsSentence ? 96 : 40,
-    messages: [
-      {
-        role: "system",
-        content: needsEnglishExplanation
-          ? `${buildLearnerLevelInstruction(learnerLevel, knownCount)} Translate the target English word or short phrase based on the sentence context. First identify the exact Chinese meaning in context. Then write exactly one short English sentence that explains the word in context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Use simple, common English. Avoid advanced synonyms, long clauses, and dictionary jargon. Avoid using the target word or its inflections in the explanation unless absolutely necessary. Return strict JSON only: {"word":"<precise Chinese meaning in context>","english":"<one short easy English sentence>","pos":"<single best part of speech in context>"}. No markdown or extra text.`
-          : needsSentence
-            ? 'Translate the target English word or short phrase based on the sentence context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Return strict JSON only: {"word":"<concise Chinese meaning of the word or phrase>","sentence":"<full Chinese translation of the sentence>","pos":"<single best part of speech in context>"}. No markdown, no explanation.'
-            : 'Translate the target English word or short phrase into concise Chinese based on the sentence context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Return strict JSON only: {"word":"<concise Chinese meaning>","pos":"<single best part of speech in context>"}.',
-      },
-      {
-        role: "user",
-        content: `word: ${surface}\nsentence: ${sentence}`,
-      },
-    ],
-  };
+  let content = "";
 
-  const response = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, WORD_TRANSLATION_REQUEST_TIMEOUT_MS);
+  try {
+    ({ content } = await requestLlmText({
+      settings,
+      systemPrompt: needsEnglishExplanation
+        ? `${buildLearnerLevelInstruction(learnerLevel, knownCount)} Translate the target English word or short phrase based on the sentence context. First identify the exact Chinese meaning in context. Then write exactly one short English sentence that explains the word in context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Use simple, common English. Avoid advanced synonyms, long clauses, and dictionary jargon. Avoid using the target word or its inflections in the explanation unless absolutely necessary. Return strict JSON only: {"word":"<precise Chinese meaning in context>","english":"<one short easy English sentence>","pos":"<single best part of speech in context>"}. No markdown or extra text.`
+        : needsSentence
+          ? 'Translate the target English word or short phrase based on the sentence context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Return strict JSON only: {"word":"<concise Chinese meaning of the word or phrase>","sentence":"<full Chinese translation of the sentence>","pos":"<single best part of speech in context>"}. No markdown, no explanation.'
+          : 'Translate the target English word or short phrase into concise Chinese based on the sentence context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Return strict JSON only: {"word":"<concise Chinese meaning>","pos":"<single best part of speech in context>"}.',
+      userPrompt: `word: ${surface}\nsentence: ${sentence}`,
+      temperature: 0,
+      maxTokens: needsEnglishExplanation ? 140 : needsSentence ? 96 : 40,
+      timeoutMs: WORD_TRANSLATION_REQUEST_TIMEOUT_MS,
+      preferJson: true,
+    }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "LLM request failed.";
 
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        choices?: Array<{ message?: { content?: string } }>;
-        error?: { message?: string };
-      }
-    | null;
-
-  if (!response.ok) {
-    const message = readLlmError(payload);
-
-    if (shouldFallbackToGoogle(response.status, message)) {
-      throw new TranslatorFallbackError(message || `LLM request failed: ${response.status}`);
+    if (shouldFallbackToGoogle(error instanceof LlmRequestError ? error.status ?? 0 : 0, message)) {
+      throw new TranslatorFallbackError(message);
     }
 
-    throw new Error(message || `LLM request failed: ${response.status}`);
+    throw error;
   }
 
-  const content = payload?.choices?.[0]?.message?.content ?? "";
   const parsed = parseLlmTranslationResponse(content);
 
   if (
@@ -1115,7 +1328,7 @@ export async function translateWithLlm({
     sentenceTranslation: parsed.sentenceTranslation,
     englishExplanation: parsed.englishExplanation,
     contextualPartOfSpeech: parsed.contextualPartOfSpeech,
-    provider: "deepseek-chat",
+    provider: getLlmProviderTag(),
     cached: false,
   };
 }
@@ -1133,53 +1346,31 @@ export async function translateSelectionWithLlm({
     throw new TranslatorFallbackError("Missing LLM API key.");
   }
 
-  const endpoint = `${settings.providerBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const selection = trimContext(text);
   const context = trimContext(contextText || text);
-  const body = {
-    model: settings.providerModel,
-    temperature: 0,
-    max_tokens: 180,
-    messages: [
-      {
-        role: "system",
-        content:
-          'Translate the selected English text into natural Chinese. If the selected text is a single word or a short phrase, translate that unit precisely based on context. If the selected text is a clause or a full sentence, translate the whole selected text completely and naturally. Return strict JSON only: {"word":"<Chinese translation of the selected text>"} with no markdown or extra text.',
-      },
-      {
-        role: "user",
-        content: `selected_text: ${selection}\ncontext: ${context}`,
-      },
-    ],
-  };
+  let content = "";
 
-  const response = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, SELECTION_TRANSLATION_REQUEST_TIMEOUT_MS);
+  try {
+    ({ content } = await requestLlmText({
+      settings,
+      systemPrompt:
+        'Translate the selected English text into natural Chinese. If the selected text is a single word or a short phrase, translate that unit precisely based on context. If the selected text is a clause or a full sentence, translate the whole selected text completely and naturally. Return strict JSON only: {"word":"<Chinese translation of the selected text>"} with no markdown or extra text.',
+      userPrompt: `selected_text: ${selection}\ncontext: ${context}`,
+      temperature: 0,
+      maxTokens: 180,
+      timeoutMs: SELECTION_TRANSLATION_REQUEST_TIMEOUT_MS,
+      preferJson: true,
+    }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "LLM selection request failed.";
 
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        choices?: Array<{ message?: { content?: string } }>;
-        error?: { message?: string };
-      }
-    | null;
-
-  if (!response.ok) {
-    const message = readLlmError(payload);
-
-    if (shouldFallbackToGoogle(response.status, message)) {
-      throw new TranslatorFallbackError(message || `LLM selection request failed: ${response.status}`);
+    if (shouldFallbackToGoogle(error instanceof LlmRequestError ? error.status ?? 0 : 0, message)) {
+      throw new TranslatorFallbackError(message);
     }
 
-    throw new Error(message || `LLM selection request failed: ${response.status}`);
+    throw error;
   }
 
-  const content = payload?.choices?.[0]?.message?.content ?? "";
   const parsed = parseLlmTranslationResponse(content);
 
   if (!parsed.translation) {
@@ -1188,7 +1379,7 @@ export async function translateSelectionWithLlm({
 
   return {
     translation: parsed.translation,
-    provider: "deepseek-chat",
+    provider: getLlmProviderTag(),
     cached: false,
   };
 }
@@ -1204,8 +1395,7 @@ export async function analyzeSentenceWithLlm({
     throw new Error("请先在设置页填写 LLM API Key。");
   }
 
-  const endpoint = `${settings.providerBaseUrl.replace(/\/+$/, "")}/chat/completions`;
-  const sentence = trimContext(text);
+  const sentence = text.trim();
   const analysisPrompt = [
     "You are an English sentence analysis tutor for Chinese learners.",
     "Your goal is to support accurate translation, not abstract grammar discussion.",
@@ -1240,16 +1430,14 @@ export async function analyzeSentenceWithLlm({
 
   try {
     const result = await requestSentenceAnalysis({
-      endpoint,
-      apiKey: settings.apiKey,
-      model: settings.providerModel,
+      settings,
       sentence,
       systemPrompt: analysisPrompt,
     });
 
     return {
       ...result,
-      provider: "deepseek-chat",
+      provider: getLlmProviderTag(),
       cached: false,
     };
   } catch (error) {
@@ -1314,9 +1502,20 @@ export async function translateWithGoogle({
 export function sanitizeTranslatorSettings(
   input?: Partial<TranslatorSettings> | null,
 ): TranslatorSettings {
+  const rawCacheDurationValue = Number(input?.cacheDurationValue);
+  const cacheDurationValue = Number.isFinite(rawCacheDurationValue)
+    ? Math.min(10080, Math.max(1, Math.round(rawCacheDurationValue)))
+    : DEFAULT_TRANSLATOR_SETTINGS.cacheDurationValue;
+  const llmProvider = input?.llmProvider === "gemini"
+    ? "gemini"
+    : input?.llmProvider === "claude"
+      ? "claude"
+      : "openai";
+
   return {
-    providerBaseUrl: input?.providerBaseUrl?.trim() || DEFAULT_TRANSLATOR_SETTINGS.providerBaseUrl,
-    providerModel: input?.providerModel?.trim() || DEFAULT_TRANSLATOR_SETTINGS.providerModel,
+    llmProvider,
+    providerBaseUrl: input?.providerBaseUrl?.trim() || getDefaultLlmBaseUrl(llmProvider),
+    providerModel: input?.providerModel?.trim() || getDefaultLlmModel(llmProvider),
     apiKey: input?.apiKey?.trim() ?? "",
     fallbackToGoogle: input?.fallbackToGoogle ?? true,
     llmDisplayMode:
@@ -1325,7 +1524,14 @@ export function sanitizeTranslatorSettings(
         : input?.llmDisplayMode === "english"
           ? "english"
           : "word",
+    cacheDurationValue,
+    cacheDurationUnit: input?.cacheDurationUnit === "hours" ? "hours" : "minutes",
   };
+}
+
+export function getTranslatorCacheTtlMs(settings: TranslatorSettings): number {
+  const multiplier = settings.cacheDurationUnit === "hours" ? 60 * 60 * 1000 : 60 * 1000;
+  return settings.cacheDurationValue * multiplier;
 }
 
 export function isTranslatorFallbackError(error: unknown): boolean {

@@ -15,7 +15,11 @@ import {
   updateKnownBaseRank,
 } from "../shared/settings";
 import { getSettings, saveSettings } from "../shared/storage";
-import { DEFAULT_TRANSLATOR_SETTINGS } from "../shared/translator";
+import {
+  DEFAULT_TRANSLATOR_SETTINGS,
+  getDefaultLlmBaseUrl,
+  getDefaultLlmModel,
+} from "../shared/translator";
 import type { TranslatorSettings, UserSettings } from "../shared/types";
 
 interface SearchEntry {
@@ -73,6 +77,11 @@ app.innerHTML = `
       <h2>语境翻译设置</h2>
       <p class="muted">页面默认先显示 Google 单词翻译；当你手动点语境翻译时，会结合句子语境给出更好的结果。你可以选择只显示单词释义，或额外显示整句翻译 / 英英解释。API Key 只保存在当前浏览器本地，不会进入 GitHub 仓库。</p>
       <div class="rank-controls">
+        <select id="llmProvider">
+          <option value="openai">OpenAI / Compatible</option>
+          <option value="gemini">Gemini</option>
+          <option value="claude">Claude</option>
+        </select>
         <input id="providerBaseUrl" type="text" placeholder="Base URL" />
         <input id="providerModel" type="text" placeholder="Model" />
         <input id="providerApiKey" type="password" placeholder="API Key（仅本地保存）" />
@@ -81,6 +90,14 @@ app.innerHTML = `
           <option value="sentence">显示单词翻译 + 整句翻译</option>
           <option value="english">显示单词翻译 + 英英解释</option>
         </select>
+        <div class="cache-settings">
+          <input id="cacheDurationValue" type="number" min="1" step="1" placeholder="缓存时长" />
+          <select id="cacheDurationUnit">
+            <option value="minutes">分钟</option>
+            <option value="hours">小时</option>
+          </select>
+        </div>
+        <p class="muted">翻译、英英解释和发音结果只保存在当前浏览器内存中。超过设定时长或扩展后台被回收后，会重新请求 API。</p>
         <label class="muted"><input id="fallbackToGoogle" type="checkbox" checked /> 调用失败时自动回退 Google</label>
         <div class="word-actions">
           <button class="primary" id="saveTranslatorButton">保存翻译设置</button>
@@ -114,10 +131,13 @@ const extraKnownCount = document.querySelector<HTMLElement>("#extraKnownCount")!
 const ignoredCount = document.querySelector<HTMLElement>("#ignoredCount")!;
 const searchInput = document.querySelector<HTMLInputElement>("#searchInput")!;
 const searchResults = document.querySelector<HTMLElement>("#searchResults")!;
+const llmProvider = document.querySelector<HTMLSelectElement>("#llmProvider")!;
 const providerBaseUrl = document.querySelector<HTMLInputElement>("#providerBaseUrl")!;
 const providerModel = document.querySelector<HTMLInputElement>("#providerModel")!;
 const providerApiKey = document.querySelector<HTMLInputElement>("#providerApiKey")!;
 const llmDisplayMode = document.querySelector<HTMLSelectElement>("#llmDisplayMode")!;
+const cacheDurationValue = document.querySelector<HTMLInputElement>("#cacheDurationValue")!;
+const cacheDurationUnit = document.querySelector<HTMLSelectElement>("#cacheDurationUnit")!;
 const fallbackToGoogle = document.querySelector<HTMLInputElement>("#fallbackToGoogle")!;
 const saveTranslatorButton = document.querySelector<HTMLButtonElement>("#saveTranslatorButton")!;
 const masteredList = document.querySelector<HTMLElement>("#masteredList")!;
@@ -295,10 +315,13 @@ function renderAll() {
   totalKnownCount.textContent = String(countTotalKnown(settings));
   extraKnownCount.textContent = String(countExtraMastered(settings));
   ignoredCount.textContent = String(settings.ignoredWords.length);
+  llmProvider.value = translatorSettings.llmProvider;
   providerBaseUrl.value = translatorSettings.providerBaseUrl;
   providerModel.value = translatorSettings.providerModel;
   providerApiKey.value = translatorSettings.apiKey;
   llmDisplayMode.value = translatorSettings.llmDisplayMode;
+  cacheDurationValue.value = String(translatorSettings.cacheDurationValue);
+  cacheDurationUnit.value = translatorSettings.cacheDurationUnit;
   fallbackToGoogle.checked = translatorSettings.fallbackToGoogle;
   renderSearch();
   renderMasteredList();
@@ -396,6 +419,12 @@ clearButton.addEventListener("click", async () => {
 
 saveTranslatorButton.addEventListener("click", async () => {
   await persistTranslatorSettings({
+    llmProvider:
+      llmProvider.value === "gemini"
+        ? "gemini"
+        : llmProvider.value === "claude"
+          ? "claude"
+          : "openai",
     providerBaseUrl: providerBaseUrl.value,
     providerModel: providerModel.value,
     apiKey: providerApiKey.value,
@@ -405,8 +434,21 @@ saveTranslatorButton.addEventListener("click", async () => {
         : llmDisplayMode.value === "english"
           ? "english"
           : "word",
+    cacheDurationValue: Number(cacheDurationValue.value),
+    cacheDurationUnit: cacheDurationUnit.value === "hours" ? "hours" : "minutes",
     fallbackToGoogle: fallbackToGoogle.checked,
   });
+});
+
+llmProvider.addEventListener("change", () => {
+  const provider =
+    llmProvider.value === "gemini"
+      ? "gemini"
+      : llmProvider.value === "claude"
+        ? "claude"
+        : "openai";
+  providerBaseUrl.value = getDefaultLlmBaseUrl(provider);
+  providerModel.value = getDefaultLlmModel(provider);
 });
 
 async function boot() {

@@ -1,0 +1,106 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+import { STORAGE_SETTINGS_KEY } from "../src/shared/constants";
+import { DEFAULT_SETTINGS } from "../src/shared/settings";
+import { getSettings, saveSettings } from "../src/shared/storage";
+
+type StorageAreaMock = {
+  get: ReturnType<typeof vi.fn>;
+  set: ReturnType<typeof vi.fn>;
+};
+
+describe("settings storage", () => {
+  let localStore: Record<string, unknown>;
+  let syncStore: Record<string, unknown>;
+  let localArea: StorageAreaMock;
+  let syncArea: StorageAreaMock;
+
+  beforeEach(() => {
+    localStore = {};
+    syncStore = {};
+
+    localArea = {
+      get: vi.fn(async (key?: string) => {
+        if (!key) {
+          return { ...localStore };
+        }
+
+        return { [key]: localStore[key] };
+      }),
+      set: vi.fn(async (value: Record<string, unknown>) => {
+        Object.assign(localStore, value);
+      }),
+    };
+
+    syncArea = {
+      get: vi.fn(async (key?: string) => {
+        if (!key) {
+          return { ...syncStore };
+        }
+
+        return { [key]: syncStore[key] };
+      }),
+      set: vi.fn(async (value: Record<string, unknown>) => {
+        Object.assign(syncStore, value);
+      }),
+    };
+
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: localArea,
+        sync: syncArea,
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  test("prefers local settings over sync", async () => {
+    localStore[STORAGE_SETTINGS_KEY] = {
+      ...DEFAULT_SETTINGS,
+      knownBaseRank: 1234,
+    };
+    syncStore[STORAGE_SETTINGS_KEY] = {
+      ...DEFAULT_SETTINGS,
+      knownBaseRank: 5678,
+    };
+
+    const settings = await getSettings();
+
+    expect(settings.knownBaseRank).toBe(1234);
+    expect(syncArea.get).not.toHaveBeenCalled();
+  });
+
+  test("migrates legacy sync settings into local storage", async () => {
+    syncStore[STORAGE_SETTINGS_KEY] = {
+      ...DEFAULT_SETTINGS,
+      knownBaseRank: 4321,
+    };
+
+    const settings = await getSettings();
+
+    expect(settings.knownBaseRank).toBe(4321);
+    expect(localArea.set).toHaveBeenCalledWith({
+      [STORAGE_SETTINGS_KEY]: expect.objectContaining({
+        knownBaseRank: 4321,
+      }),
+    });
+  });
+
+  test("writes user settings to local storage only", async () => {
+    await saveSettings({
+      ...DEFAULT_SETTINGS,
+      knownBaseRank: 2468,
+    });
+
+    expect(localArea.set).toHaveBeenCalledWith({
+      [STORAGE_SETTINGS_KEY]: expect.objectContaining({
+        knownBaseRank: 2468,
+      }),
+    });
+    expect(syncArea.set).not.toHaveBeenCalled();
+  });
+});

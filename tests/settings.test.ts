@@ -66,6 +66,11 @@ describe("settings resolution", () => {
     expect(resolveWordFlags("adding", lookupRank("adding"), settings, "adding").shouldTranslate).toBe(true);
   });
 
+  test("maps -ves plurals back to the mastered base lemma", () => {
+    const settings = setWordMastered(DEFAULT_SETTINGS, "life");
+    expect(resolveWordFlags("lives", lookupRank("lives"), settings, "lives").isKnown).toBe(true);
+  });
+
   test("ignored words override mastery", () => {
     const settings = setWordIgnored(setWordMastered(DEFAULT_SETTINGS, "chatgpt"), "chatgpt");
     const flags = resolveWordFlags("chatgpt", null, settings, "ChatGPT");

@@ -2518,13 +2518,17 @@ function resetEnglishExplanationDisplay() {
   tooltip.englishExplanationTextEl.textContent = "";
 }
 
+function isLlmTranslationProvider(provider?: string) {
+  return provider === "llm";
+}
+
 function setPrimaryTranslationContent(
   translation?: string,
   contextualPartOfSpeech?: string,
   provider?: string,
 ) {
   tooltip.primaryTranslationTextEl.textContent = translation ?? "";
-  const pos = provider === "deepseek-chat" ? contextualPartOfSpeech ?? "" : "";
+  const pos = isLlmTranslationProvider(provider) ? contextualPartOfSpeech ?? "" : "";
   tooltip.primaryTranslationPosEl.textContent = pos;
   tooltip.primaryTranslationPosEl.dataset.visible = pos ? "true" : "false";
 }
@@ -2811,7 +2815,7 @@ function renderSelectionTooltip(
   tooltip.hintEl.dataset.visible = "true";
   tooltip.hintEl.dataset.loading = "false";
   tooltip.hintEl.dataset.kind = "status";
-  tooltip.hintEl.textContent = result?.translationProvider === "deepseek-chat"
+  tooltip.hintEl.textContent = isLlmTranslationProvider(result?.translationProvider)
     ? "已使用语境翻译。"
     : "默认 Google 结果。";
   tooltip.rankEl.dataset.kind = "rank";
@@ -3882,7 +3886,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 globalThis.chrome?.storage?.onChanged?.addListener?.((changes, areaName) => {
-  if (areaName !== "sync" || !changes.userSettings) {
+  if ((areaName !== "sync" && areaName !== "local") || !changes.userSettings) {
     return;
   }
 

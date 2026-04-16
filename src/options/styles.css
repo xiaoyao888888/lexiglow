@@ -162,6 +162,12 @@ select {
   flex-wrap: wrap;
 }
 
+.cache-settings {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 140px;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -204,5 +210,9 @@ button {
   .hero,
   .panel {
     border-radius: 20px;
+  }
+
+  .cache-settings {
+    grid-template-columns: 1fr;
   }
 }

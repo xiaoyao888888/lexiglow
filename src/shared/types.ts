@@ -6,11 +6,14 @@ export interface UserSettings {
 }
 
 export interface TranslatorSettings {
+  llmProvider: "openai" | "gemini" | "claude";
   providerBaseUrl: string;
   providerModel: string;
   apiKey: string;
   fallbackToGoogle: boolean;
   llmDisplayMode: "word" | "sentence" | "english";
+  cacheDurationValue: number;
+  cacheDurationUnit: "minutes" | "hours";
 }
 
 export type LearnerLevelBand = "A1" | "A2" | "B1" | "B2" | "C1";
@@ -84,6 +87,16 @@ export interface SentenceAnalysisResult {
   clauseBlocks: SentenceClauseBlock[];
   provider: string;
   cached: boolean;
+}
+
+export interface SentenceAnalysisCacheEntry {
+  translation: string;
+  structure: string;
+  analysisSteps: string[];
+  highlights: SentenceHighlight[];
+  clauseBlocks: SentenceClauseBlock[];
+  provider: string;
+  updatedAt: number;
 }
 
 export interface LexiconLookupResult {

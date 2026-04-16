@@ -1,14 +1,23 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  analyzeSentenceWithLlm,
+  getLlmCacheSignature,
+  getTranslatorCacheTtlMs,
   parseEnglishExplanationResponse,
   parseGoogleTranslateResponse,
   parseLlmTranslationResponse,
   parseSentenceAnalysisResponse,
   sanitizeTranslatorSettings,
   summarizeDictionaryPartOfSpeech,
+  translateSelectionWithLlm,
 } from "../src/shared/translator";
 import { getDisplayClauseBlocks } from "../src/shared/sentenceAnalysisDisplay";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("google response parsing", () => {
   test("joins translation segments", () => {
@@ -44,6 +53,57 @@ describe("llm response parsing", () => {
 
   test("accepts english as llm display mode", () => {
     expect(sanitizeTranslatorSettings({ llmDisplayMode: "english" }).llmDisplayMode).toBe("english");
+  });
+
+  test("defaults llm provider to openai-compatible mode", () => {
+    expect(sanitizeTranslatorSettings({}).llmProvider).toBe("openai");
+  });
+
+  test("defaults cache duration settings", () => {
+    expect(sanitizeTranslatorSettings({})).toEqual(expect.objectContaining({
+      cacheDurationValue: 30,
+      cacheDurationUnit: "minutes",
+    }));
+  });
+
+  test("computes cache ttl from value and unit", () => {
+    expect(getTranslatorCacheTtlMs(sanitizeTranslatorSettings({
+      cacheDurationValue: 45,
+      cacheDurationUnit: "minutes",
+    }))).toBe(45 * 60 * 1000);
+
+    expect(getTranslatorCacheTtlMs(sanitizeTranslatorSettings({
+      cacheDurationValue: 2,
+      cacheDurationUnit: "hours",
+    }))).toBe(2 * 60 * 60 * 1000);
+  });
+
+  test("uses provider-specific default base url and model", () => {
+    expect(sanitizeTranslatorSettings({ llmProvider: "gemini" })).toEqual(expect.objectContaining({
+      llmProvider: "gemini",
+      providerBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      providerModel: "gemini-2.5-flash",
+    }));
+
+    expect(sanitizeTranslatorSettings({ llmProvider: "claude" })).toEqual(expect.objectContaining({
+      llmProvider: "claude",
+      providerBaseUrl: "https://api.anthropic.com/v1",
+      providerModel: "claude-sonnet-4-20250514",
+    }));
+  });
+
+  test("separates llm cache signatures by provider and model", () => {
+    expect(getLlmCacheSignature(sanitizeTranslatorSettings({
+      llmProvider: "openai",
+      providerBaseUrl: "https://api.openai.com/v1/",
+      providerModel: "gpt-4.1-mini",
+    }))).toBe("openai::https://api.openai.com/v1::gpt-4.1-mini");
+
+    expect(getLlmCacheSignature(sanitizeTranslatorSettings({
+      llmProvider: "gemini",
+      providerBaseUrl: "https://api.openai.com/v1/",
+      providerModel: "gpt-4.1-mini",
+    }))).toBe("gemini::https://api.openai.com/v1::gpt-4.1-mini");
   });
 
   test("reads structured english explanation payload", () => {
@@ -114,7 +174,178 @@ describe("llm response parsing", () => {
   });
 });
 
+describe("llm provider requests", () => {
+  test("formats openai-compatible selection translation requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: '{"word":"保留"}',
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await translateSelectionWithLlm({
+      text: "preserves",
+      contextText: "Codex sync preserves non-managed config.toml content.",
+      settings: sanitizeTranslatorSettings({
+        llmProvider: "openai",
+        providerBaseUrl: "https://api.openai.com/v1",
+        providerModel: "gpt-4.1-mini",
+        apiKey: "openai-key",
+      }),
+    });
+
+    expect(result.translation).toBe("保留");
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const payload = JSON.parse(String(request.body)) as {
+      messages: Array<{ role: string; content: string }>;
+      model: string;
+      response_format?: unknown;
+    };
+
+    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    expect((request.headers as Record<string, string>).Authorization).toBe("Bearer openai-key");
+    expect(payload.model).toBe("gpt-4.1-mini");
+    expect(payload.messages.at(-1)?.content).toContain("selected_text: preserves");
+    expect(payload.response_format).toBeUndefined();
+  });
+
+  test("formats gemini selection translation requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            finishReason: "STOP",
+            content: {
+              parts: [{ text: '{"word":"保留"}' }],
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await translateSelectionWithLlm({
+      text: "preserves",
+      contextText: "Codex sync preserves non-managed config.toml content.",
+      settings: sanitizeTranslatorSettings({
+        llmProvider: "gemini",
+        providerBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        providerModel: "gemini-2.5-flash",
+        apiKey: "gemini-key",
+      }),
+    });
+
+    expect(result.translation).toBe("保留");
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const payload = JSON.parse(String(request.body)) as {
+      system_instruction: { parts: Array<{ text: string }> };
+      contents: Array<{ role: string; parts: Array<{ text: string }> }>;
+      generationConfig: { responseMimeType?: string };
+    };
+
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
+    expect((request.headers as Record<string, string>)["x-goog-api-key"]).toBe("gemini-key");
+    expect(payload.system_instruction.parts[0]?.text).toContain("Translate the selected English text");
+    expect(payload.contents[0]?.role).toBe("user");
+    expect(payload.contents[0]?.parts[0]?.text).toContain("selected_text: preserves");
+    expect(payload.generationConfig.responseMimeType).toBe("application/json");
+  });
+
+  test("formats claude selection translation requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: '{"word":"保留"}' }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await translateSelectionWithLlm({
+      text: "preserves",
+      contextText: "Codex sync preserves non-managed config.toml content.",
+      settings: sanitizeTranslatorSettings({
+        llmProvider: "claude",
+        providerBaseUrl: "https://api.anthropic.com/v1",
+        providerModel: "claude-sonnet-4-20250514",
+        apiKey: "claude-key",
+      }),
+    });
+
+    expect(result.translation).toBe("保留");
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const payload = JSON.parse(String(request.body)) as {
+      model: string;
+      system: string;
+      max_tokens: number;
+      messages: Array<{ role: string; content: string }>;
+    };
+
+    expect(url).toBe("https://api.anthropic.com/v1/messages");
+    expect((request.headers as Record<string, string>)["x-api-key"]).toBe("claude-key");
+    expect((request.headers as Record<string, string>)["anthropic-version"]).toBe("2023-06-01");
+    expect(payload.model).toBe("claude-sonnet-4-20250514");
+    expect(payload.system).toContain("Translate the selected English text");
+    expect(payload.messages[0]?.content).toContain("selected_text: preserves");
+    expect(payload.max_tokens).toBe(180);
+  });
+});
+
 describe("sentence analysis parsing", () => {
+  test("sends the full analysis sentence without trimContext truncation", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: JSON.stringify({
+                translation: "完整译文。",
+                structure: "main clause",
+                analysisSteps: ["一", "二", "三", "四"],
+                highlights: ["predicate|||works"],
+                clauseBlocks: ["main|||A very long sentence"],
+              }),
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const longSentence = ` ${"A".repeat(230)} ${"B".repeat(90)} `;
+
+    await analyzeSentenceWithLlm({
+      text: longSentence,
+      settings: {
+        llmProvider: "openai",
+        providerBaseUrl: "https://example.com/v1",
+        providerModel: "test-model",
+        apiKey: "test-key",
+        fallbackToGoogle: true,
+        llmDisplayMode: "word",
+        cacheDurationValue: 30,
+        cacheDurationUnit: "minutes",
+      },
+    });
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const payload = JSON.parse(String(request.body)) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+
+    expect(payload.messages.at(-1)?.content).toBe(`sentence: ${longSentence.trim()}`);
+  });
+
   test("reads structured analysis payload", () => {
     expect(
       parseSentenceAnalysisResponse(

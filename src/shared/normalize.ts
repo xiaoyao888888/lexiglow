@@ -89,6 +89,10 @@ export function toLemma(surface: string): string {
     return collapseDoubleEnding(token.slice(0, -2));
   }
 
+  if (token.endsWith("ves") && token.length > 4) {
+    return `${token.slice(0, -3)}f`;
+  }
+
   if (token.endsWith("es") && token.length > 4) {
     return token.slice(0, -2);
   }
@@ -125,6 +129,12 @@ export function getLemmaCandidates(surface: string): string[] {
 
   if (token.endsWith("ed") && token.length > 4) {
     pushStemVariants(candidates, token.slice(0, -2));
+  }
+
+  if (token.endsWith("ves") && token.length > 4) {
+    const base = token.slice(0, -3);
+    candidates.push(`${base}f`);
+    candidates.push(`${base}fe`);
   }
 
   if (token.endsWith("es") && token.length > 4) {

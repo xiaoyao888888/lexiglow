@@ -33,34 +33,33 @@ import {
   updateKnownBaseRank,
 } from "../shared/settings";
 import {
-  getCachedSelectionTranslation,
-  getCachedTranslation,
-  getCachedPronunciation,
-  getCachedEnglishExplanation,
   getSettings,
   getTranslatorSettings,
   saveSettings,
   saveTranslatorSettings,
-  setCachedSelectionTranslation,
-  setCachedTranslation,
-  setCachedPronunciation,
-  setCachedEnglishExplanation,
 } from "../shared/storage";
+import { createMemoryCache } from "../shared/memoryCache";
 import {
   analyzeSentenceWithLlm,
+  getLlmCacheSignature,
   explainWordInEnglishWithLlm,
+  getTranslatorCacheTtlMs,
   isTranslatorFallbackError,
   lookupDictionaryPartOfSpeech,
   translateSelectionWithLlm,
   translateWithGoogle,
   translateWithLlm,
 } from "../shared/translator";
+import { shouldReuseCachedTranslation } from "../shared/translationCache";
 import type {
   CacheEntry,
+  EnglishExplanationCacheEntry,
   EnglishExplanationResult,
   LexiconLookupResult,
   PronunciationAccent,
+  PronunciationCacheEntry,
   PronunciationResult,
+  SentenceAnalysisCacheEntry,
   SentenceAnalysisResult,
   TranslationResult,
 } from "../shared/types";
@@ -68,6 +67,20 @@ import type {
 const inFlightTranslations = new Map<string, Promise<TranslationResult>>();
 const inFlightPronunciations = new Map<string, Promise<PronunciationResult>>();
 const inFlightEnglishExplanations = new Map<string, Promise<EnglishExplanationResult>>();
+const inFlightSentenceAnalyses = new Map<string, Promise<SentenceAnalysisResult>>();
+const translationCache = createMemoryCache<CacheEntry>();
+const selectionTranslationCache = createMemoryCache<CacheEntry>();
+const englishExplanationCache = createMemoryCache<EnglishExplanationCacheEntry>();
+const pronunciationCache = createMemoryCache<PronunciationCacheEntry>();
+const sentenceAnalysisCache = createMemoryCache<SentenceAnalysisCacheEntry>();
+
+function clearRuntimeCaches() {
+  translationCache.clear();
+  selectionTranslationCache.clear();
+  englishExplanationCache.clear();
+  pronunciationCache.clear();
+  sentenceAnalysisCache.clear();
+}
 
 async function translateByChoice({
   provider,
@@ -111,15 +124,16 @@ async function getOrTranslate(
   provider: TranslationProviderChoice,
   responseMode: "word" | "sentence",
 ): Promise<TranslationResult> {
-  const cacheProviderKey = `${provider}:${responseMode}`;
+  const translatorSettings = await getTranslatorSettings();
+  const llmCacheSignature = provider === "llm" ? getLlmCacheSignature(translatorSettings) : "google";
+  const cacheProviderKey = `${provider}:${responseMode}:${llmCacheSignature}`;
   const requestKey = `${cacheProviderKey}::${lemma}::${contextText}`;
-  const cached = await getCachedTranslation(lemma, contextText, cacheProviderKey);
-  const shouldRefreshCachedLlmTranslation =
-    provider === "llm" &&
-    cached?.provider === "deepseek-chat" &&
-    !cached.contextualPartOfSpeech;
+  const cacheTtlMs = getTranslatorCacheTtlMs(translatorSettings);
+  const cached = translationCache.get(requestKey);
 
-  if (cached?.translation && !shouldRefreshCachedLlmTranslation) {
+  if (cached && shouldReuseCachedTranslation(cached, provider, {
+    requireContextualPartOfSpeech: provider === "llm",
+  })) {
     return {
       translation: cached.translation,
       sentenceTranslation: cached.sentenceTranslation,
@@ -139,14 +153,14 @@ async function getOrTranslate(
 
   try {
     const result = await pending;
-    await setCachedTranslation(lemma, contextText, cacheProviderKey, {
+    translationCache.set(requestKey, {
       translation: result.translation,
       sentenceTranslation: result.sentenceTranslation,
       englishExplanation: result.englishExplanation,
       contextualPartOfSpeech: result.contextualPartOfSpeech,
       provider: result.provider,
       updatedAt: Date.now(),
-    });
+    }, cacheTtlMs);
     return result;
   } finally {
     inFlightTranslations.delete(requestKey);
@@ -158,11 +172,14 @@ async function getOrTranslateSelection(
   contextText: string,
   provider: TranslationProviderChoice,
 ): Promise<TranslationResult> {
-  const cacheProviderKey = `${provider}:selection-v2`;
+  const translatorSettings = await getTranslatorSettings();
+  const llmCacheSignature = provider === "llm" ? getLlmCacheSignature(translatorSettings) : "google";
+  const cacheProviderKey = `${provider}:selection-v2:${llmCacheSignature}`;
   const requestKey = `selection::${cacheProviderKey}::${text}::${contextText}`;
-  const cached = await getCachedSelectionTranslation(text, contextText, cacheProviderKey);
+  const cacheTtlMs = getTranslatorCacheTtlMs(translatorSettings);
+  const cached = selectionTranslationCache.get(requestKey);
 
-  if (cached?.translation) {
+  if (cached && shouldReuseCachedTranslation(cached, provider)) {
     return {
       translation: cached.translation,
       sentenceTranslation: cached.sentenceTranslation,
@@ -201,13 +218,13 @@ async function getOrTranslateSelection(
 
   try {
     const result = await pending;
-    await setCachedSelectionTranslation(text, contextText, cacheProviderKey, {
+    selectionTranslationCache.set(requestKey, {
       translation: result.translation,
       sentenceTranslation: result.sentenceTranslation,
       englishExplanation: result.englishExplanation,
       provider: result.provider,
       updatedAt: Date.now(),
-    });
+    }, cacheTtlMs);
     return result;
   } finally {
     inFlightTranslations.delete(requestKey);
@@ -328,7 +345,7 @@ async function handleTranslateWord(message: TranslateWordMessage): Promise<Lexic
       sentenceTranslation: undefined,
       englishExplanation: undefined,
       contextualPartOfSpeech: undefined,
-      translationProvider: provider === "llm" ? "deepseek-chat" : "google-web",
+      translationProvider: provider === "llm" ? "llm" : "google-web",
       cached: false,
     };
   }
@@ -341,8 +358,11 @@ async function getOrExplainWordInEnglish(
 ): Promise<EnglishExplanationResult> {
   const userSettings = await getSettings();
   const learnerLevel = estimateLearnerLevel(userSettings);
-  const requestKey = `explain::${learnerLevel}::${lemma}::${contextText}`;
-  const cached = await getCachedEnglishExplanation(lemma, contextText, learnerLevel);
+  const translatorSettings = await getTranslatorSettings();
+  const llmCacheSignature = getLlmCacheSignature(translatorSettings);
+  const requestKey = `explain::${llmCacheSignature}::${learnerLevel}::${lemma}::${contextText}`;
+  const cacheTtlMs = getTranslatorCacheTtlMs(translatorSettings);
+  const cached = englishExplanationCache.get(requestKey);
 
   if (cached?.meaning && cached?.explanation) {
     return {
@@ -371,12 +391,12 @@ async function getOrExplainWordInEnglish(
 
   try {
     const result = await pending;
-    await setCachedEnglishExplanation(lemma, contextText, learnerLevel, {
+    englishExplanationCache.set(requestKey, {
       meaning: result.meaning,
       explanation: result.explanation,
       provider: result.provider,
       updatedAt: Date.now(),
-    });
+    }, cacheTtlMs);
     return result;
   } finally {
     inFlightEnglishExplanations.delete(requestKey);
@@ -388,11 +408,48 @@ async function handleAnalyzeSelection(
 ): Promise<SentenceAnalysisResult> {
   const text = message.payload.text.trim();
   const translatorSettings = await getTranslatorSettings();
+  const cacheTtlMs = getTranslatorCacheTtlMs(translatorSettings);
+  const requestKey = `analysis::${getLlmCacheSignature(translatorSettings)}::${text}`;
+  const cached = sentenceAnalysisCache.get(requestKey);
+
+  if (cached) {
+    return {
+      translation: cached.translation,
+      structure: cached.structure,
+      analysisSteps: cached.analysisSteps,
+      highlights: cached.highlights,
+      clauseBlocks: cached.clauseBlocks,
+      provider: cached.provider,
+      cached: true,
+    };
+  }
+
+  let pending = inFlightSentenceAnalyses.get(requestKey);
+
+  if (!pending) {
+    pending = (async () => {
+      const result = await analyzeSentenceWithLlm({
+        text,
+        settings: translatorSettings,
+      });
+
+      sentenceAnalysisCache.set(requestKey, {
+        translation: result.translation,
+        structure: result.structure,
+        analysisSteps: result.analysisSteps,
+        highlights: result.highlights,
+        clauseBlocks: result.clauseBlocks,
+        provider: result.provider,
+        updatedAt: Date.now(),
+      }, cacheTtlMs);
+
+      return result;
+    })();
+    inFlightSentenceAnalyses.set(requestKey, pending);
+  }
+
   try {
-    return await analyzeSentenceWithLlm({
-      text,
-      settings: translatorSettings,
-    });
+    return await pending;
   } catch (error) {
     const messageText = error instanceof Error ? error.message : "";
     console.warn("[LexiGlow][sentence-analysis][background]", {
@@ -405,6 +462,8 @@ async function handleAnalyzeSelection(
     }
 
     throw error;
+  } finally {
+    inFlightSentenceAnalyses.delete(requestKey);
   }
 }
 
@@ -418,7 +477,7 @@ async function handleTranslateSelection(
     return {
       text,
       translation: "暂不可用",
-      translationProvider: message.payload.provider === "llm" ? "deepseek-chat" : "google-web",
+      translationProvider: message.payload.provider === "llm" ? "llm" : "google-web",
       cached: false,
     };
   }
@@ -437,7 +496,7 @@ async function handleTranslateSelection(
     return {
       text,
       translation: "暂不可用",
-      translationProvider: message.payload.provider === "llm" ? "deepseek-chat" : "google-web",
+      translationProvider: message.payload.provider === "llm" ? "llm" : "google-web",
       cached: false,
     };
   }
@@ -452,7 +511,9 @@ async function getOrLookupPronunciation(surface: string): Promise<PronunciationR
     };
   }
 
-  const cached = await getCachedPronunciation(normalized);
+  const translatorSettings = await getTranslatorSettings();
+  const cacheTtlMs = getTranslatorCacheTtlMs(translatorSettings);
+  const cached = pronunciationCache.get(normalized);
 
   if (cached) {
     return {
@@ -489,13 +550,13 @@ async function getOrLookupPronunciation(surface: string): Promise<PronunciationR
 
       const result = extractPronunciation(firstEntry as Parameters<typeof extractPronunciation>[0]);
 
-      await setCachedPronunciation(normalized, {
+      pronunciationCache.set(normalized, {
         ukPhonetic: result.ukPhonetic,
         usPhonetic: result.usPhonetic,
         ukAudioUrl: result.ukAudioUrl,
         usAudioUrl: result.usAudioUrl,
         updatedAt: Date.now(),
-      });
+      }, cacheTtlMs);
 
       return {
         ...result,
@@ -637,6 +698,7 @@ async function handleGetTranslatorSettings(_message: GetTranslatorSettingsMessag
 
 async function handleSaveTranslatorSettings(message: SaveTranslatorSettingsMessage) {
   await saveTranslatorSettings(message.payload.settings);
+  clearRuntimeCaches();
   const settings = await getTranslatorSettings();
   return { ok: true, settings };
 }
