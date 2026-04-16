@@ -4,7 +4,7 @@ export interface WordAtOffset {
   end: number;
 }
 
-const ENGLISH_TOKEN_SOURCE = "[A-Za-z]+(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*";
+const ENGLISH_TOKEN_SOURCE = "[A-Za-z]+(?:'[A-Za-z]+)?";
 const ENGLISH_WORD_RE = new RegExp(`^${ENGLISH_TOKEN_SOURCE}$`);
 
 export function createEnglishTokenMatcher(): RegExp {
@@ -25,7 +25,25 @@ function isEnglishLikeWord(surface: string): boolean {
 }
 
 function isStructuralTechnicalBoundaryCharacter(char: string | undefined): boolean {
-  return Boolean(char && /[_@/\\-]/u.test(char));
+  return Boolean(char && /[_@/\\]/u.test(char));
+}
+
+function isHyphenLinkedToTechnicalToken(text: string, start: number, end: number): boolean {
+  if (text[end] === "-") {
+    const trailing = text.slice(end + 1, Math.min(text.length, end + 24));
+    if (/^[A-Za-z'-]*[@_\\/]/u.test(trailing)) {
+      return true;
+    }
+  }
+
+  if (text[start - 1] === "-") {
+    const leading = text.slice(Math.max(0, start - 24), start - 1);
+    if (/[@_\\/][A-Za-z'-]*$/u.test(leading)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function isDotEmbeddedInTechnicalToken(text: string, start: number, end: number): boolean {
@@ -48,6 +66,7 @@ function isEmbeddedInTechnicalToken(text: string, start: number, end: number): b
     isAlphaNumeric(text[end]) ||
     isStructuralTechnicalBoundaryCharacter(text[start - 1]) ||
     isStructuralTechnicalBoundaryCharacter(text[end]) ||
+    isHyphenLinkedToTechnicalToken(text, start, end) ||
     isDotEmbeddedInTechnicalToken(text, start, end) ||
     isUrlSchemeBoundary(text, start, end)
   );
@@ -132,26 +151,6 @@ export function extractWordAtOffset(text: string, offset: number): WordAtOffset 
 
     if (!isEnglishLikeWord(surface)) {
       return null;
-    }
-
-    if (surface.includes("-")) {
-      const subwordMatcher = /[A-Za-z]+(?:'[A-Za-z]+)?/g;
-      let subMatch = subwordMatcher.exec(surface);
-
-      while (subMatch) {
-        const subStart = start + subMatch.index;
-        const subEnd = subStart + subMatch[0].length;
-
-        if (candidateOffsets.some((value) => value >= subStart && value < subEnd)) {
-          return {
-            surface: subMatch[0],
-            start: subStart,
-            end: subEnd,
-          };
-        }
-
-        subMatch = subwordMatcher.exec(surface);
-      }
     }
 
     return { surface, start, end };

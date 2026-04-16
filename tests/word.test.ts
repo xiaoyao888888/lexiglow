@@ -61,7 +61,7 @@ describe("extractWordAtOffset", () => {
     });
   });
 
-  test("extracts the hovered subword inside a hyphenated compound", () => {
+  test("extracts each side of a hyphenated compound as its own word", () => {
     expect(extractWordAtOffset("Use mixed-precision training.", 8)).toEqual({
       surface: "mixed",
       start: 4,
@@ -73,13 +73,26 @@ describe("extractWordAtOffset", () => {
       end: 19,
     });
   });
+
+  test("extracts each side of another hyphenated compound independently", () => {
+    expect(extractWordAtOffset("The result is high-impact work.", 16)).toEqual({
+      surface: "high",
+      start: 14,
+      end: 18,
+    });
+    expect(extractWordAtOffset("The result is high-impact work.", 21)).toEqual({
+      surface: "impact",
+      start: 19,
+      end: 25,
+    });
+  });
 });
 
 describe("selection helpers", () => {
   test("detects a single english word", () => {
     expect(isSingleEnglishWord("received")).toBe(true);
     expect(isSingleEnglishWord("received.")).toBe(true);
-    expect(isSingleEnglishWord("mixed-precision")).toBe(true);
+    expect(isSingleEnglishWord("mixed-precision")).toBe(false);
     expect(isSingleEnglishWord("look up")).toBe(false);
   });
 
@@ -87,6 +100,7 @@ describe("selection helpers", () => {
     expect(normalizeSingleEnglishWord("\"received.\"")).toBe("received");
     expect(normalizeSingleEnglishWord("(continue)")).toBe("continue");
     expect(normalizeSingleEnglishWord("worked,")).toBe("worked");
+    expect(normalizeSingleEnglishWord("high-impact")).toBe("");
   });
 
   test("accepts english words, phrases, and sentences", () => {
@@ -111,6 +125,6 @@ describe("selection helpers", () => {
 
   test("counts english words in normalized selections", () => {
     expect(countEnglishWords("in   charge   of")).toBe(3);
-    expect(countEnglishWords("mixed-precision")).toBe(1);
+    expect(countEnglishWords("mixed-precision")).toBe(2);
   });
 });

@@ -1175,7 +1175,25 @@ function isAlphaNumeric(char: string | undefined): boolean {
 }
 
 function isStructuralTechnicalBoundaryCharacter(char: string | undefined): boolean {
-  return Boolean(char && /[_@/\\-]/u.test(char));
+  return Boolean(char && /[_@/\\]/u.test(char));
+}
+
+function isHyphenLinkedToTechnicalToken(text: string, start: number, end: number): boolean {
+  if (text[end] === "-") {
+    const trailing = text.slice(end + 1, Math.min(text.length, end + 24));
+    if (/^[A-Za-z'-]*[@_\\/]/u.test(trailing)) {
+      return true;
+    }
+  }
+
+  if (text[start - 1] === "-") {
+    const leading = text.slice(Math.max(0, start - 24), start - 1);
+    if (/[@_\\/][A-Za-z'-]*$/u.test(leading)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function isDotEmbeddedInTechnicalToken(text: string, start: number, end: number): boolean {
@@ -1198,6 +1216,7 @@ function isEmbeddedInTechnicalToken(text: string, start: number, end: number): b
     isAlphaNumeric(text[end]) ||
     isStructuralTechnicalBoundaryCharacter(text[start - 1]) ||
     isStructuralTechnicalBoundaryCharacter(text[end]) ||
+    isHyphenLinkedToTechnicalToken(text, start, end) ||
     isDotEmbeddedInTechnicalToken(text, start, end) ||
     isUrlSchemeBoundary(text, start, end)
   );
@@ -2272,16 +2291,17 @@ function runtimeSend<T>(message: RuntimeMessage): Promise<T> {
 }
 
 function isExtensionContextInvalidated(error: unknown): boolean {
-  if (
-    error instanceof TypeError &&
-    error.message.toLowerCase().includes("sendmessage")
-  ) {
-    return true;
+  if (!(error instanceof Error)) {
+    return false;
   }
 
+  const message = error.message.toLowerCase();
+
   return (
-    error instanceof Error &&
-    error.message.toLowerCase().includes("extension context invalidated")
+    (error instanceof TypeError && message.includes("sendmessage")) ||
+    message.includes("extension context invalidated") ||
+    message.includes("message channel closed before a response was received") ||
+    message.includes("a listener indicated an asynchronous response")
   );
 }
 
