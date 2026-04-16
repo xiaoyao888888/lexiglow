@@ -2,34 +2,29 @@
 
 ## Goal
 
-Keep long-sentence analysis on a single LLM call while making the output more translation-oriented and easier to review, while keeping the frontend clause rendering readable and stable on long comma-heavy sentences.
+Keep long-sentence analysis on a single LLM call, preserve the selection-to-analysis tooltip flow, and keep clause rendering readable on long comma-heavy sentences.
 
 ## Current Code State
 
 - single-shot request path is active
-- the old multi-stage analysis path was removed from `src/shared/translator.ts`
-- current prompt follows a five-step translation-oriented method
-- tooltip copy in `src/content/index.ts` matches the five-step flow
+- current prompt follows a four-step translation-oriented method
+- `src/content/index.ts` now shows selected text in a translation-first card, then enters the analysis panel from the `长难句翻译` action
+- the analysis panel is organized as source sentence, translation, structure, then step cards
+- loading copy in `src/content/index.ts` is now `正在翻译长难句` with the caption `正在整理句子结构、译序和核心意思，请稍等。`
 - display-side clause rendering now routes through `src/shared/sentenceAnalysisDisplay.ts`
 - `src/content/index.ts` consumes the shared display helper instead of keeping clause matching and comma-attachment logic inline
-- long-sentence blocks were restyled away from capsule chips toward an irregular brush-highlight presentation
+- long-sentence blocks remain inline highlight spans rather than full-line capsules
 - display-side comma gaps are attached to the preceding clause block, while trailing spaces remain outside the highlighted block
+- analysis steps are rendered as four cards tagged `切层次 / 抓主干 / 理枝叶 / 顺译序`, and leading step markers from model output are stripped before display
 
 ## Verified Results Worth Reusing
 
-- `npm test -- tests/translator.test.ts` passed after the five-step change
-- `npm run build` passed after the five-step change
 - `npx vitest run tests/translator.test.ts -t "keeps commas attached to the preceding clause in display blocks for real analysis text"` passed after the display extraction and comma-gap fix
-- `npm test` passed with the new parser-to-display regression in place
-- `npm run build` passed after the frontend brush-highlight restyle
-- `npx tsc --noEmit` was rerun; only the pre-existing `src/background/index.ts` `cached` union-type errors remained
-- real API validation was run against this sample sentence:
-  - `This gives us the same mixed-precision benefit as autocast but with full explicit control over what runs in which precision.`
-
-Observed sample output traits:
-- `analysisSteps` now follows the five-step structure more closely
-- `structure` is returned as English, but may be over-compressed
-- `translation` can still drift into literal wording on technical sentences
+- `npx vitest run tests/translator.test.ts` currently passes
+- `npm test` currently passes
+- `npm run build` currently passes
+- `npx tsc --noEmit` was rerun after pulling `295f26c`; it still fails on the old `src/background/index.ts` `cached` union-type errors and now also fails on `src/content/index.ts` response-result narrowing around sentence translation rendering
+- no real API validation was rerun during this notes refresh
 
 Observed fixed display regression sample:
 - sentence:
@@ -41,32 +36,29 @@ Observed fixed display regression sample:
 
 ## Active Limitations
 
-- `translation` still tends to literal phrasing on technical terms
-  - observed examples included wording like `自动转换` and `完全明确的控制`
-- `structure` can collapse too aggressively
-  - observed sample output included forms like `This gives us the benefit with control.`
 - request failures are still surfaced to the user as a generic format-instability message
 - there is still no browser-level visual snapshot or DOM assertion for the brush-highlight rendering
-- repo typecheck still reports unrelated background-page `cached` union-type errors, so `npx tsc --noEmit` is not yet a clean whole-repo gate
+- repo typecheck is no longer a clean gate:
+  - `src/background/index.ts` still reports the old `cached` union-type errors
+  - `src/content/index.ts` now also reports nullable `response.result` handling errors in the translation-update path
+- the current prompt wording and tooltip hierarchy were not real-API-validated in this refresh
 
 ## Next-Step Guidance
 
-1. tighten prompt rules for `translation`
-   - explicitly forbid the literal phrasings already seen in real outputs
-   - prefer stable technical wording when a phrase is already well understood
-2. tighten prompt rules for `structure`
-   - require retention of key backbone phrasing
-   - avoid summary-style reductions like `benefit with control`
-3. keep the fixed display regression sentence as a required rerun after each frontend clause-rendering change
-4. if visual fidelity matters further, add a browser-level screenshot or DOM-level assertion instead of relying only on string block checks
-5. rerun:
+1. clear the current `npx tsc --noEmit` failures before using repo typecheck as a release gate
+   - fix the old `src/background/index.ts` `cached` union handling
+   - add explicit narrowing or local aliases for `response.result` inside the `src/content/index.ts` translation callbacks
+2. keep the fixed display regression sentence as a required rerun after each frontend clause-rendering change
+3. if visual fidelity matters further, add a browser-level screenshot or DOM-level assertion instead of relying only on string block checks
+4. rerun:
    ```bash
    npx vitest run tests/translator.test.ts -t "keeps commas attached to the preceding clause in display blocks for real analysis text"
-   npm test -- tests/translator.test.ts
+   npx vitest run tests/translator.test.ts
    npm test
    npm run build
+   npx tsc --noEmit
    ```
-   then do one real API check with a temporary runner when prompt or parser behavior changes
+5. do one real API check with a temporary runner when prompt wording or parser behavior changes
 
 ## Important Caveats
 

@@ -6,6 +6,7 @@ import {
   parseLlmTranslationResponse,
   parseSentenceAnalysisResponse,
   sanitizeTranslatorSettings,
+  summarizeDictionaryPartOfSpeech,
 } from "../src/shared/translator";
 import { getDisplayClauseBlocks } from "../src/shared/sentenceAnalysisDisplay";
 
@@ -64,6 +65,32 @@ describe("llm response parsing", () => {
       translation: "这里表示收到、接到。",
       englishExplanation: "If you receive something, you get it from someone.",
     });
+  });
+
+  test("summarizes dictionary part-of-speech labels", () => {
+    expect(
+      summarizeDictionaryPartOfSpeech([
+        {
+          meanings: [
+            { partOfSpeech: "noun" },
+            { partOfSpeech: "verb" },
+            { partOfSpeech: "noun" },
+          ],
+        },
+      ]),
+    ).toBe("n. / v.");
+  });
+
+  test("ignores unknown dictionary part-of-speech labels", () => {
+    expect(
+      summarizeDictionaryPartOfSpeech([
+        {
+          meanings: [
+            { partOfSpeech: "prefix" },
+          ],
+        },
+      ]),
+    ).toBeUndefined();
   });
 });
 

@@ -50,6 +50,7 @@ import {
   analyzeSentenceWithLlm,
   explainWordInEnglishWithLlm,
   isTranslatorFallbackError,
+  lookupDictionaryPartOfSpeech,
   translateSelectionWithLlm,
   translateWithGoogle,
   translateWithLlm,
@@ -260,14 +261,17 @@ async function handleTranslateWord(message: TranslateWordMessage): Promise<Lexic
   }
 
   try {
+    const partOfSpeechPromise = lookupDictionaryPartOfSpeech({ lemma, surface });
     const translatorSettings = provider === "llm" ? await getTranslatorSettings() : null;
     const englishMode = provider === "llm" && translatorSettings?.llmDisplayMode === "english";
     const translationMode =
       provider === "llm" && translatorSettings?.llmDisplayMode === "sentence" ? "sentence" : "word";
+    const partOfSpeech = await partOfSpeechPromise;
 
     return {
       lemma,
       surface,
+      partOfSpeech,
       rank,
       ...flags,
       isIgnored: false,

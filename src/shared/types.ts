@@ -88,6 +88,7 @@ export interface SentenceAnalysisResult {
 export interface LexiconLookupResult {
   lemma: string;
   surface: string;
+  partOfSpeech?: string;
   rank: number | null;
   isIgnored: boolean;
   isKnown: boolean;

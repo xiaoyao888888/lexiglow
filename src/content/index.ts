@@ -108,6 +108,23 @@ const TOOLTIP_STYLE = `
     color: #10213a;
     letter-spacing: 0.01em;
   }
+  .wordwise-surface-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .wordwise-surface-pos {
+    display: none;
+    font-size: 10.5px;
+    line-height: 1;
+    font-weight: 600;
+    color: #7b8798;
+    letter-spacing: 0.02em;
+  }
+  .wordwise-surface-pos[data-visible="true"] {
+    display: inline-flex;
+  }
   .wordwise-pronunciation {
     display: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -278,15 +295,10 @@ const TOOLTIP_STYLE = `
     line-height: 1.28;
     color: #929baa;
     margin: 0;
+    text-align: right;
   }
   .wordwise-hint[data-kind="status"] {
-    justify-self: end;
-    text-align: right;
     line-height: 1.12;
-    margin-bottom: -2px;
-  }
-  .wordwise-word-view[data-layout="selection"] .wordwise-hint[data-kind="status"] {
-    margin-top: -10px;
   }
   .wordwise-hint[data-visible="false"] {
     display: none;
@@ -352,8 +364,27 @@ const TOOLTIP_STYLE = `
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
+    flex-wrap: wrap;
     margin-top: -1px;
     margin-bottom: -2px;
+  }
+  .wordwise-meta .wordwise-hint {
+    max-width: 100%;
+  }
+  .wordwise-meta-divider {
+    display: none;
+    color: #c3ccd7;
+    font-size: 10px;
+    line-height: 1;
+    user-select: none;
+  }
+  .wordwise-hint[data-visible="true"] + .wordwise-meta-divider + .wordwise-rank:not(:empty) {
+    display: inline-flex;
+    align-items: center;
+  }
+  .wordwise-hint[data-loading="true"] + .wordwise-meta-divider,
+  .wordwise-hint[data-loading="true"] + .wordwise-meta-divider + .wordwise-rank {
+    display: none;
   }
   .wordwise-rank {
     font-size: 10.25px;
@@ -361,6 +392,11 @@ const TOOLTIP_STYLE = `
     color: #96a0ae;
     letter-spacing: 0.01em;
     text-align: right;
+  }
+  .wordwise-rank[data-kind="status"] {
+    font-size: 10.5px;
+    line-height: 1.12;
+    color: #929baa;
   }
   .wordwise-button {
     border: 1px solid transparent;
@@ -1752,8 +1788,16 @@ function createTooltipRoot() {
   closeButton.setAttribute("aria-label", "关闭");
   closeButton.textContent = "×";
 
+  const surfaceHeaderEl = document.createElement("div");
+  surfaceHeaderEl.className = "wordwise-surface-row";
+
   const surfaceEl = document.createElement("div");
   surfaceEl.className = "wordwise-surface";
+
+  const surfacePosEl = document.createElement("span");
+  surfacePosEl.className = "wordwise-surface-pos";
+  surfacePosEl.dataset.visible = "false";
+  surfaceHeaderEl.append(surfaceEl, surfacePosEl);
 
   const pronunciationEl = document.createElement("div");
   pronunciationEl.className = "wordwise-pronunciation";
@@ -1827,8 +1871,14 @@ function createTooltipRoot() {
   const metaEl = document.createElement("div");
   metaEl.className = "wordwise-meta";
 
+  const metaDividerEl = document.createElement("span");
+  metaDividerEl.className = "wordwise-meta-divider";
+  metaDividerEl.textContent = "•";
+  metaDividerEl.setAttribute("aria-hidden", "true");
+
   const rankEl = document.createElement("span");
   rankEl.className = "wordwise-rank";
+  rankEl.dataset.kind = "rank";
 
   const button = document.createElement("button");
   button.className = "wordwise-button";
@@ -1957,8 +2007,8 @@ function createTooltipRoot() {
 
   translationEl.append(primaryTranslationEl, secondaryTranslationEl, englishExplanationEl);
   actionsEl.append(llmButton, selectionAnalysisButton, ignoreButton, button);
-  metaEl.append(rankEl);
-  wordView.append(surfaceEl, pronunciationEl, translationEl, actionsEl, metaEl, hintEl);
+  metaEl.append(hintEl, metaDividerEl, rankEl);
+  wordView.append(surfaceHeaderEl, pronunciationEl, translationEl, actionsEl, metaEl);
   analysisHeader.append(analysisTitleEl, analysisTriggerButton);
   analysisView.append(
     analysisHeader,
@@ -1979,7 +2029,9 @@ function createTooltipRoot() {
     closeButton,
     wordView,
     analysisView,
+    surfaceHeaderEl,
     surfaceEl,
+    surfacePosEl,
     pronunciationEl,
     britishPhoneticEl,
     americanPhoneticEl,
@@ -2195,6 +2247,18 @@ function rankLabel(result: LexiconLookupResult): string {
   }
 
   return `词频 #${result.rank}`;
+}
+
+function showWordMetaStatus(text: string) {
+  tooltip.hintEl.dataset.visible = "false";
+  tooltip.hintEl.dataset.loading = "false";
+  tooltip.rankEl.dataset.kind = "status";
+  tooltip.rankEl.textContent = text;
+}
+
+function restoreWordMetaRank() {
+  tooltip.rankEl.dataset.kind = "rank";
+  tooltip.rankEl.textContent = tooltip.rankEl.dataset.rankLabel ?? "";
 }
 
 function runtimeSend<T>(message: RuntimeMessage): Promise<T> {
@@ -2462,10 +2526,11 @@ function setWordTooltipControls(mode: "word" | "selection") {
   tooltip.wordView.dataset.layout = mode;
   tooltip.button.style.display = isSelection ? "none" : "inline-flex";
   tooltip.ignoreButton.style.display = isSelection ? "none" : "inline-flex";
-  tooltip.metaEl.style.display = isSelection ? "none" : "flex";
+  tooltip.metaEl.style.display = "flex";
+  tooltip.rankEl.style.display = isSelection ? "none" : "inline";
   tooltip.llmButton.style.display = "inline-flex";
   tooltip.pronunciationEl.dataset.visible = isSelection ? "false" : "true";
-  tooltip.surfaceEl.style.display = isSelection ? "none" : "block";
+  tooltip.surfaceHeaderEl.style.display = isSelection ? "none" : "flex";
   tooltip.closeButton.dataset.visible = isSelection ? "true" : "false";
   tooltip.britishButton.dataset.playing = "false";
   tooltip.americanButton.dataset.playing = "false";
@@ -2533,6 +2598,8 @@ function renderSelectionTooltip(
   tooltip.analysisView.dataset.visible = "false";
   setWordTooltipControls("selection");
   tooltip.surfaceEl.textContent = "";
+  tooltip.surfacePosEl.textContent = "";
+  tooltip.surfacePosEl.dataset.visible = "false";
   tooltip.primaryTranslationEl.textContent = result?.translation ?? "";
   tooltip.secondaryTranslationEl.textContent = result?.sentenceTranslation ?? "";
   tooltip.secondaryTranslationEl.dataset.visible = result?.sentenceTranslation ? "true" : "false";
@@ -2545,6 +2612,8 @@ function renderSelectionTooltip(
   tooltip.hintEl.textContent = result?.translationProvider === "deepseek-chat"
     ? "已使用语境翻译。"
     : "默认 Google 结果。";
+  tooltip.rankEl.dataset.kind = "rank";
+  tooltip.rankEl.dataset.rankLabel = "";
   tooltip.rankEl.textContent = "";
   tooltip.host.style.display = "block";
   activeAnchorRect = context.rect;
@@ -2635,6 +2704,8 @@ function renderTooltip(result: LexiconLookupResult, rect: DOMRect) {
   tooltip.analysisView.dataset.visible = "false";
   setWordTooltipControls("word");
   tooltip.surfaceEl.textContent = result.surface;
+  tooltip.surfacePosEl.textContent = result.partOfSpeech ?? "";
+  tooltip.surfacePosEl.dataset.visible = result.partOfSpeech ? "true" : "false";
   tooltip.primaryTranslationEl.textContent = result.translation ?? "";
   tooltip.secondaryTranslationEl.textContent = result.sentenceTranslation ?? "";
   tooltip.secondaryTranslationEl.dataset.visible = result.sentenceTranslation ? "true" : "false";
@@ -2656,7 +2727,9 @@ function renderTooltip(result: LexiconLookupResult, rect: DOMRect) {
     tooltip.hintEl.textContent = "可切换到语境翻译。";
     tooltip.secondaryTranslationEl.dataset.visible = "false";
   }
-  tooltip.rankEl.textContent = rankLabel(result);
+  tooltip.rankEl.dataset.kind = "rank";
+  tooltip.rankEl.dataset.rankLabel = rankLabel(result);
+  tooltip.rankEl.textContent = tooltip.rankEl.dataset.rankLabel;
   tooltip.host.style.display = "block";
   activeAnchorRect = rect;
   activeSelectionTooltipContext = null;
@@ -2881,10 +2954,7 @@ async function requestTranslation(provider: TranslationProviderChoice) {
     tooltip.secondaryTranslationEl.dataset.visible = "false";
     resetEnglishExplanationDisplay();
   }
-  tooltip.hintEl.dataset.visible = "true";
-  tooltip.hintEl.dataset.loading = "true";
-  tooltip.hintEl.dataset.kind = "status";
-  tooltip.hintEl.textContent = provider === "llm" ? "语境翻译中..." : "Google 翻译中...";
+  showWordMetaStatus(provider === "llm" ? "语境翻译中..." : "Google 翻译中...");
 
   let response: LookupWordResponse;
 
@@ -2910,6 +2980,8 @@ async function requestTranslation(provider: TranslationProviderChoice) {
   if (!response.ok || !response.result) {
     if (translationRequestId === activeTranslationRequestId) {
       tooltip.translationEl.dataset.transition = "idle";
+      restoreWordMetaRank();
+      tooltip.hintEl.dataset.visible = "true";
       tooltip.hintEl.dataset.loading = "false";
       tooltip.hintEl.dataset.kind = "status";
       tooltip.hintEl.textContent = "翻译暂不可用。";
@@ -2929,18 +3001,6 @@ async function requestTranslation(provider: TranslationProviderChoice) {
   await animateTranslationSwap(() => {
     renderTooltip(response.result, requestContext.rect);
   });
-  if (response.result.translationProvider) {
-    const providerLabel =
-      response.result.translationProvider === "google-web" ? "Google" : "语境翻译";
-    tooltip.hintEl.dataset.loading = "false";
-    tooltip.hintEl.dataset.kind = "status";
-    tooltip.hintEl.textContent =
-      providerLabel === "Google"
-        ? "默认 Google 结果。"
-        : response.result.englishExplanation
-          ? "已使用语境翻译，并附带英英解释。"
-          : "已使用语境翻译。";
-  }
 }
 
 async function requestSelectionTranslation(

@@ -88,6 +88,129 @@ export function parseGoogleTranslateResponse(payload: unknown): string {
   return segments.join("").trim();
 }
 
+const DICTIONARY_POS_LABELS: Record<string, string> = {
+  noun: "n.",
+  verb: "v.",
+  adjective: "adj.",
+  adverb: "adv.",
+  pronoun: "pron.",
+  preposition: "prep.",
+  conjunction: "conj.",
+  interjection: "int.",
+  determiner: "det.",
+  article: "art.",
+  abbreviation: "abbr.",
+  auxiliary: "aux.",
+  "auxiliary verb": "aux.",
+  "modal verb": "modal.",
+  numeral: "num.",
+  number: "num.",
+};
+
+const inFlightPartOfSpeech = new Map<string, Promise<string | undefined>>();
+const cachedPartOfSpeech = new Map<string, string | null>();
+
+function formatDictionaryPartOfSpeechLabel(value: string): string | undefined {
+  return DICTIONARY_POS_LABELS[value.trim().toLowerCase()];
+}
+
+export function summarizeDictionaryPartOfSpeech(payload: unknown): string | undefined {
+  if (!Array.isArray(payload)) {
+    return undefined;
+  }
+
+  const labels: string[] = [];
+
+  for (const entry of payload) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const meanings = (entry as { meanings?: unknown }).meanings;
+
+    if (!Array.isArray(meanings)) {
+      continue;
+    }
+
+    for (const meaning of meanings) {
+      if (!meaning || typeof meaning !== "object") {
+        continue;
+      }
+
+      const raw = (meaning as { partOfSpeech?: unknown }).partOfSpeech;
+
+      if (typeof raw !== "string") {
+        continue;
+      }
+
+      const label = formatDictionaryPartOfSpeechLabel(raw);
+
+      if (!label || labels.includes(label)) {
+        continue;
+      }
+
+      labels.push(label);
+
+      if (labels.length >= 2) {
+        return labels.join(" / ");
+      }
+    }
+  }
+
+  return labels.length ? labels.join(" / ") : undefined;
+}
+
+export async function lookupDictionaryPartOfSpeech({
+  lemma,
+  surface,
+}: {
+  lemma: string;
+  surface: string;
+}): Promise<string | undefined> {
+  const query = (lemma || surface).trim().toLowerCase();
+
+  if (!query) {
+    return undefined;
+  }
+
+  const cached = cachedPartOfSpeech.get(query);
+
+  if (cached !== undefined) {
+    return cached ?? undefined;
+  }
+
+  let pending = inFlightPartOfSpeech.get(query);
+
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const response = await fetch(
+          `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(query)}`,
+        );
+
+        if (!response.ok) {
+          cachedPartOfSpeech.set(query, null);
+          return undefined;
+        }
+
+        const payload = (await response.json().catch(() => null)) as unknown;
+        const label = summarizeDictionaryPartOfSpeech(payload);
+        cachedPartOfSpeech.set(query, label ?? null);
+        return label;
+      } catch {
+        cachedPartOfSpeech.set(query, null);
+        return undefined;
+      } finally {
+        inFlightPartOfSpeech.delete(query);
+      }
+    })();
+
+    inFlightPartOfSpeech.set(query, pending);
+  }
+
+  return pending;
+}
+
 export function parseLlmTranslationResponse(payload: string): {
   translation: string;
   sentenceTranslation?: string;
