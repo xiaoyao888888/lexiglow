@@ -342,12 +342,12 @@ const TOOLTIP_STYLE = `
     top: 0;
     width: var(--wordwise-action-indicator-width, 78px);
     height: var(--wordwise-action-indicator-height, 30px);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.96);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.94);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.92),
-      0 1px 2px rgba(15, 23, 42, 0.05),
-      0 4px 10px rgba(148, 163, 184, 0.16);
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 2px 6px rgba(148, 163, 184, 0.1);
     transform: translate3d(
       var(--wordwise-action-indicator-x, 0),
       var(--wordwise-action-indicator-y, 0),
@@ -368,34 +368,35 @@ const TOOLTIP_STYLE = `
     gap: 4px;
     margin-top: 4px;
     margin-left: 10px;
-    padding: 4px;
-    border-radius: 13px;
+    padding: 3px;
+    border-radius: 12px;
     border: 1px solid rgba(148, 163, 184, 0.08);
     background:
-      linear-gradient(180deg, rgba(233, 239, 246, 0.94), rgba(223, 231, 241, 0.9));
+      linear-gradient(180deg, rgba(239, 243, 248, 0.9), rgba(231, 237, 245, 0.84));
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.72),
-      inset 0 -1px 0 rgba(148, 163, 184, 0.08),
-      0 4px 14px rgba(148, 163, 184, 0.05);
+      inset 0 1px 0 rgba(255, 255, 255, 0.68),
+      inset 0 -1px 0 rgba(148, 163, 184, 0.06),
+      0 2px 8px rgba(148, 163, 184, 0.04);
     width: fit-content;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button {
     position: relative;
     z-index: 1;
-    min-height: 30px;
-    min-width: 78px;
-    padding: 0 12px;
-    border-radius: 10px;
-    font-size: 10.5px;
-    font-weight: 580;
-    color: #56677d;
+    min-height: 28px;
+    min-width: 74px;
+    padding: 0 11px;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 570;
+    letter-spacing: -0.01em;
+    color: #5d6d82;
     background: transparent;
     border-color: transparent;
     box-shadow: none;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button--secondary {
     background: transparent;
-    color: #5a6b80;
+    color: #627286;
     border-color: transparent;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button:not(.wordwise-button--secondary) {
@@ -418,15 +419,44 @@ const TOOLTIP_STYLE = `
     margin-top: -5px;
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-actions {
-    gap: 6px;
-    padding-top: 6px;
-    border-top: 1px solid rgba(148, 163, 184, 0.08);
-    margin-top: -1px;
+    gap: 4px;
+    margin-top: 2px;
+    padding: 3px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    background:
+      linear-gradient(180deg, rgba(239, 243, 248, 0.88), rgba(231, 237, 245, 0.82));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.66),
+      inset 0 -1px 0 rgba(148, 163, 184, 0.06),
+      0 2px 8px rgba(148, 163, 184, 0.04);
+    width: fit-content;
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-button {
+    position: relative;
+    z-index: 1;
     min-height: 28px;
-    min-width: 84px;
-    padding: 0 12px;
+    min-width: 80px;
+    padding: 0 11px;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 570;
+    letter-spacing: -0.01em;
+    color: #5d6d82;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-button--secondary {
+    background: transparent;
+    color: #627286;
+    border-color: transparent;
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-button:hover {
+    transform: translateY(0);
+    background: rgba(255, 255, 255, 0.48);
+    border-color: transparent;
+    color: #40526a;
   }
   .wordwise-meta {
     display: flex;
@@ -2499,15 +2529,39 @@ function setPrimaryTranslationContent(
   tooltip.primaryTranslationPosEl.dataset.visible = pos ? "true" : "false";
 }
 
-function setWordActionIndicator(target?: HTMLButtonElement | null) {
-  if (tooltip.wordView.dataset.layout !== "word") {
+function getDefaultActionIndicatorTarget(): HTMLButtonElement | null {
+  if (tooltip.wordView.dataset.layout === "selection") {
+    if (tooltip.selectionAnalysisButton.style.display !== "none") {
+      return tooltip.selectionAnalysisButton;
+    }
+
+    if (tooltip.llmButton.style.display !== "none") {
+      return tooltip.llmButton;
+    }
+  }
+
+  if (tooltip.button.style.display !== "none") {
+    return tooltip.button;
+  }
+
+  if (tooltip.llmButton.style.display !== "none") {
+    return tooltip.llmButton;
+  }
+
+  return null;
+}
+
+function setActionIndicator(target?: HTMLButtonElement | null) {
+  const layout = tooltip.wordView.dataset.layout;
+
+  if (layout !== "word" && layout !== "selection") {
     tooltip.actionIndicatorEl.dataset.visible = "false";
     return;
   }
 
-  const button = target ?? tooltip.button;
+  const button = target ?? getDefaultActionIndicatorTarget();
 
-  if (button.style.display === "none") {
+  if (!button || button.style.display === "none") {
     tooltip.actionIndicatorEl.dataset.visible = "false";
     return;
   }
@@ -2527,9 +2581,9 @@ function setWordActionIndicator(target?: HTMLButtonElement | null) {
   tooltip.actionIndicatorEl.dataset.visible = "true";
 }
 
-function syncWordActionIndicator(target?: HTMLButtonElement | null) {
+function syncActionIndicator(target?: HTMLButtonElement | null) {
   requestAnimationFrame(() => {
-    setWordActionIndicator(target);
+    setActionIndicator(target);
   });
 }
 
@@ -2682,7 +2736,7 @@ function setWordTooltipControls(mode: "word" | "selection") {
   tooltip.britishButton.dataset.playing = "false";
   tooltip.americanButton.dataset.playing = "false";
   tooltip.selectionAnalysisButton.style.display = isSelection ? "inline-flex" : "none";
-  syncWordActionIndicator();
+  syncActionIndicator();
 }
 
 function resetPronunciationDisplay(surface: string) {
@@ -3552,17 +3606,17 @@ tooltip.analysisTriggerButton.addEventListener("click", async () => {
   await requestSentenceAnalysis(activeSelectionContext);
 });
 
-[tooltip.llmButton, tooltip.ignoreButton, tooltip.button].forEach((actionButton) => {
+[tooltip.llmButton, tooltip.selectionAnalysisButton, tooltip.ignoreButton, tooltip.button].forEach((actionButton) => {
   actionButton.addEventListener("mouseenter", () => {
-    syncWordActionIndicator(actionButton);
+    syncActionIndicator(actionButton);
   });
   actionButton.addEventListener("focus", () => {
-    syncWordActionIndicator(actionButton);
+    syncActionIndicator(actionButton);
   });
 });
 
 tooltip.actionsEl.addEventListener("mouseleave", () => {
-  syncWordActionIndicator();
+  syncActionIndicator();
 });
 
 tooltip.selectionAnalysisButton.addEventListener("click", async () => {
