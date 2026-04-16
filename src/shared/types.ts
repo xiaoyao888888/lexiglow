@@ -19,6 +19,7 @@ export interface TranslationResult {
   translation: string;
   sentenceTranslation?: string;
   englishExplanation?: string;
+  contextualPartOfSpeech?: string;
   provider: string;
   cached: boolean;
 }
@@ -89,6 +90,7 @@ export interface LexiconLookupResult {
   lemma: string;
   surface: string;
   partOfSpeech?: string;
+  contextualPartOfSpeech?: string;
   rank: number | null;
   isIgnored: boolean;
   isKnown: boolean;
@@ -112,6 +114,7 @@ export interface CacheEntry {
   translation: string;
   sentenceTranslation?: string;
   englishExplanation?: string;
+  contextualPartOfSpeech?: string;
   provider: string;
   updatedAt: number;
 }

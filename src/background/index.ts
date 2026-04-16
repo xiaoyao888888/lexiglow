@@ -110,16 +110,21 @@ async function getOrTranslate(
   contextText: string,
   provider: TranslationProviderChoice,
   responseMode: "word" | "sentence",
-): Promise<CacheEntry | TranslationResult> {
+): Promise<TranslationResult> {
   const cacheProviderKey = `${provider}:${responseMode}`;
   const requestKey = `${cacheProviderKey}::${lemma}::${contextText}`;
   const cached = await getCachedTranslation(lemma, contextText, cacheProviderKey);
+  const shouldRefreshCachedLlmTranslation =
+    provider === "llm" &&
+    cached?.provider === "deepseek-chat" &&
+    !cached.contextualPartOfSpeech;
 
-  if (cached?.translation) {
+  if (cached?.translation && !shouldRefreshCachedLlmTranslation) {
     return {
       translation: cached.translation,
       sentenceTranslation: cached.sentenceTranslation,
       englishExplanation: cached.englishExplanation,
+      contextualPartOfSpeech: cached.contextualPartOfSpeech,
       provider: cached.provider,
       cached: true,
     };
@@ -138,6 +143,7 @@ async function getOrTranslate(
       translation: result.translation,
       sentenceTranslation: result.sentenceTranslation,
       englishExplanation: result.englishExplanation,
+      contextualPartOfSpeech: result.contextualPartOfSpeech,
       provider: result.provider,
       updatedAt: Date.now(),
     });
@@ -151,7 +157,7 @@ async function getOrTranslateSelection(
   text: string,
   contextText: string,
   provider: TranslationProviderChoice,
-): Promise<CacheEntry | TranslationResult> {
+): Promise<TranslationResult> {
   const cacheProviderKey = `${provider}:selection-v2`;
   const requestKey = `selection::${cacheProviderKey}::${text}::${contextText}`;
   const cached = await getCachedSelectionTranslation(text, contextText, cacheProviderKey);
@@ -285,6 +291,7 @@ async function handleTranslateWord(message: TranslateWordMessage): Promise<Lexic
               translation: explanation.meaning,
               sentenceTranslation: undefined,
               englishExplanation: explanation.explanation,
+              contextualPartOfSpeech: undefined,
               translationProvider: explanation.provider,
               cached: explanation.cached,
             };
@@ -301,6 +308,7 @@ async function handleTranslateWord(message: TranslateWordMessage): Promise<Lexic
               translation: translation.translation,
               sentenceTranslation: translation.sentenceTranslation,
               englishExplanation: translation.englishExplanation,
+              contextualPartOfSpeech: translation.contextualPartOfSpeech,
               translationProvider: translation.provider,
               cached: translation.cached,
             };
@@ -319,6 +327,7 @@ async function handleTranslateWord(message: TranslateWordMessage): Promise<Lexic
       translation: "暂不可用",
       sentenceTranslation: undefined,
       englishExplanation: undefined,
+      contextualPartOfSpeech: undefined,
       translationProvider: provider === "llm" ? "deepseek-chat" : "google-web",
       cached: false,
     };

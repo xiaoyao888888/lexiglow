@@ -24,10 +24,11 @@ describe("google response parsing", () => {
 describe("llm response parsing", () => {
   test("reads structured word and sentence translations", () => {
     expect(
-      parseLlmTranslationResponse('{"word":"收到的","sentence":"我们昨天收到了你的包裹。"}'),
+      parseLlmTranslationResponse('{"word":"收到的","sentence":"我们昨天收到了你的包裹。","pos":"verb"}'),
     ).toEqual({
       translation: "收到的",
       sentenceTranslation: "我们昨天收到了你的包裹。",
+      contextualPartOfSpeech: "v.",
     });
   });
 
@@ -59,11 +60,30 @@ describe("llm response parsing", () => {
   test("reads english explanation from unified llm payload", () => {
     expect(
       parseLlmTranslationResponse(
-        '{"word":"这里表示收到、接到。","english":"If you receive something, you get it from someone."}',
+        '{"word":"这里表示收到、接到。","english":"If you receive something, you get it from someone.","pos":"verb"}',
       ),
     ).toEqual({
       translation: "这里表示收到、接到。",
       englishExplanation: "If you receive something, you get it from someone.",
+      contextualPartOfSpeech: "v.",
+    });
+  });
+
+  test("normalizes contextual verb variants from llm output", () => {
+    expect(
+      parseLlmTranslationResponse('{"word":"合并","sentence":"合并前进行多代理代码审查。","pos":"gerund"}'),
+    ).toEqual({
+      translation: "合并",
+      sentenceTranslation: "合并前进行多代理代码审查。",
+      contextualPartOfSpeech: "v.",
+    });
+
+    expect(
+      parseLlmTranslationResponse('{"word":"合并","sentence":"合并前进行多代理代码审查。","pos":"verb (gerund)"}'),
+    ).toEqual({
+      translation: "合并",
+      sentenceTranslation: "合并前进行多代理代码审查。",
+      contextualPartOfSpeech: "v.",
     });
   });
 

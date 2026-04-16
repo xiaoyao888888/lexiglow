@@ -135,6 +135,35 @@ const DICTIONARY_POS_LABELS: Record<string, string> = {
   "modal verb": "modal.",
   numeral: "num.",
   number: "num.",
+  phrase: "phr.",
+};
+
+const CONTEXTUAL_POS_LABELS: Record<string, string> = {
+  noun: "n.",
+  "n.": "n.",
+  gerund: "v.",
+  verb: "v.",
+  "v.": "v.",
+  infinitive: "v.",
+  participle: "v.",
+  "present participle": "v.",
+  "past participle": "v.",
+  adjective: "adj.",
+  "adj.": "adj.",
+  adverb: "adv.",
+  "adv.": "adv.",
+  pronoun: "pron.",
+  "pron.": "pron.",
+  preposition: "prep.",
+  "prep.": "prep.",
+  conjunction: "conj.",
+  "conj.": "conj.",
+  determiner: "det.",
+  "det.": "det.",
+  auxiliary: "aux.",
+  "aux.": "aux.",
+  phrase: "phr.",
+  "phr.": "phr.",
 };
 
 const inFlightPartOfSpeech = new Map<string, Promise<string | undefined>>();
@@ -143,6 +172,32 @@ const DICTIONARY_PART_OF_SPEECH_TIMEOUT_MS = 1200;
 
 function formatDictionaryPartOfSpeechLabel(value: string): string | undefined {
   return DICTIONARY_POS_LABELS[value.trim().toLowerCase()];
+}
+
+function normalizeContextualPartOfSpeech(value: string): string | undefined {
+  const normalized = value.trim().toLowerCase();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  const direct = CONTEXTUAL_POS_LABELS[normalized];
+
+  if (direct) {
+    return direct;
+  }
+
+  const compact = normalized
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z./]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!compact) {
+    return undefined;
+  }
+
+  return CONTEXTUAL_POS_LABELS[compact];
 }
 
 export function summarizeDictionaryPartOfSpeech(payload: unknown): string | undefined {
@@ -252,6 +307,7 @@ export function parseLlmTranslationResponse(payload: string): {
   translation: string;
   sentenceTranslation?: string;
   englishExplanation?: string;
+  contextualPartOfSpeech?: string;
 } {
   const content = stripCodeFence(payload);
   const jsonStart = content.indexOf("{");
@@ -263,6 +319,7 @@ export function parseLlmTranslationResponse(payload: string): {
         word?: unknown;
         sentence?: unknown;
         english?: unknown;
+        pos?: unknown;
       };
       const translation = cleanModelOutput(typeof parsed.word === "string" ? parsed.word : "");
       const sentenceTranslation = cleanModelOutput(
@@ -271,12 +328,16 @@ export function parseLlmTranslationResponse(payload: string): {
       const englishExplanation = cleanModelOutput(
         typeof parsed.english === "string" ? parsed.english : "",
       );
+      const contextualPartOfSpeech = normalizeContextualPartOfSpeech(
+        typeof parsed.pos === "string" ? parsed.pos : "",
+      );
 
       if (translation) {
         return {
           translation,
           sentenceTranslation: sentenceTranslation || undefined,
           englishExplanation: englishExplanation || undefined,
+          contextualPartOfSpeech,
         };
       }
     } catch {
@@ -977,10 +1038,10 @@ export async function translateWithLlm({
       {
         role: "system",
         content: needsEnglishExplanation
-          ? `${buildLearnerLevelInstruction(learnerLevel, knownCount)} Translate the target English word or short phrase based on the sentence context. First identify the exact Chinese meaning in context. Then write exactly one short English sentence that explains the word in context. Use simple, common English. Avoid advanced synonyms, long clauses, and dictionary jargon. Avoid using the target word or its inflections in the explanation unless absolutely necessary. Return strict JSON only: {"word":"<precise Chinese meaning in context>","english":"<one short easy English sentence>"}. No markdown or extra text.`
+          ? `${buildLearnerLevelInstruction(learnerLevel, knownCount)} Translate the target English word or short phrase based on the sentence context. First identify the exact Chinese meaning in context. Then write exactly one short English sentence that explains the word in context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Use simple, common English. Avoid advanced synonyms, long clauses, and dictionary jargon. Avoid using the target word or its inflections in the explanation unless absolutely necessary. Return strict JSON only: {"word":"<precise Chinese meaning in context>","english":"<one short easy English sentence>","pos":"<single best part of speech in context>"}. No markdown or extra text.`
           : needsSentence
-            ? 'Translate the target English word or short phrase based on the sentence context. Return strict JSON only: {"word":"<concise Chinese meaning of the word or phrase>","sentence":"<full Chinese translation of the sentence>"}. No markdown, no explanation.'
-            : 'Translate the target English word or short phrase into concise Chinese based on the sentence context. Return strict JSON only: {"word":"<concise Chinese meaning>"}',
+            ? 'Translate the target English word or short phrase based on the sentence context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Return strict JSON only: {"word":"<concise Chinese meaning of the word or phrase>","sentence":"<full Chinese translation of the sentence>","pos":"<single best part of speech in context>"}. No markdown, no explanation.'
+            : 'Translate the target English word or short phrase into concise Chinese based on the sentence context. Also identify the single best part of speech in this sentence using one of: noun, verb, adjective, adverb, pronoun, preposition, conjunction, determiner, auxiliary, phrase. Return strict JSON only: {"word":"<concise Chinese meaning>","pos":"<single best part of speech in context>"}.',
       },
       {
         role: "user",
@@ -1053,6 +1114,7 @@ export async function translateWithLlm({
     translation: parsed.translation,
     sentenceTranslation: parsed.sentenceTranslation,
     englishExplanation: parsed.englishExplanation,
+    contextualPartOfSpeech: parsed.contextualPartOfSpeech,
     provider: "deepseek-chat",
     cached: false,
   };

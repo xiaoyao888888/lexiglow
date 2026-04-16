@@ -239,11 +239,29 @@ const TOOLTIP_STYLE = `
     filter: saturate(0.94);
   }
   .wordwise-primary-translation {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
     font-size: 14.75px;
     line-height: 1.58;
     color: #33475f;
     font-weight: 520;
     letter-spacing: 0.002em;
+  }
+  .wordwise-primary-translation-text {
+    color: inherit;
+  }
+  .wordwise-primary-translation-pos {
+    display: none;
+    font-size: 10.5px;
+    line-height: 1;
+    font-weight: 600;
+    color: #7b8798;
+    letter-spacing: 0.02em;
+  }
+  .wordwise-primary-translation-pos[data-visible="true"] {
+    display: inline-flex;
   }
   .wordwise-translation[data-compact="true"] .wordwise-primary-translation {
     font-size: 15.25px;
@@ -311,39 +329,90 @@ const TOOLTIP_STYLE = `
     animation: wordwise-fade 1s ease-in-out infinite;
   }
   .wordwise-actions {
+    position: relative;
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
     margin: 0;
   }
+  .wordwise-action-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--wordwise-action-indicator-width, 78px);
+    height: var(--wordwise-action-indicator-height, 30px);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      0 1px 2px rgba(15, 23, 42, 0.05),
+      0 4px 10px rgba(148, 163, 184, 0.16);
+    transform: translate3d(
+      var(--wordwise-action-indicator-x, 0),
+      var(--wordwise-action-indicator-y, 0),
+      0
+    );
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 160ms ease;
+  }
+  .wordwise-action-indicator[data-visible="true"] {
+    opacity: 1;
+  }
   .wordwise-word-view[data-layout="word"] .wordwise-actions {
-    gap: 6px;
-    margin-top: 3px;
-    padding-left: 10px;
+    gap: 4px;
+    margin-top: 4px;
+    margin-left: 10px;
+    padding: 4px;
+    border-radius: 13px;
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    background:
+      linear-gradient(180deg, rgba(233, 239, 246, 0.94), rgba(223, 231, 241, 0.9));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.72),
+      inset 0 -1px 0 rgba(148, 163, 184, 0.08),
+      0 4px 14px rgba(148, 163, 184, 0.05);
+    width: fit-content;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button {
-    min-height: 26px;
-    min-width: 72px;
-    padding: 0 10px;
-    font-size: 10px;
-    font-weight: 530;
+    position: relative;
+    z-index: 1;
+    min-height: 30px;
+    min-width: 78px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 580;
+    color: #56677d;
+    background: transparent;
+    border-color: transparent;
     box-shadow: none;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button--secondary {
-    background: rgba(255, 255, 255, 0.76);
-    color: #41546c;
-    border-color: rgba(148, 163, 184, 0.14);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+    background: transparent;
+    color: #5a6b80;
+    border-color: transparent;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button:not(.wordwise-button--secondary) {
-    background: #31445c;
+    color: #20324a;
+    border-color: transparent;
+    background: transparent;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button:hover {
     transform: translateY(0);
+    background: rgba(255, 255, 255, 0.48);
+    border-color: transparent;
+    color: #40526a;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-button:not(.wordwise-button--secondary):hover {
-    background: #2b3d54;
+    color: #18293f;
+    border-color: transparent;
+    background: transparent;
   }
   .wordwise-word-view[data-layout="word"] .wordwise-meta {
     margin-top: -5px;
@@ -1837,6 +1906,9 @@ function createTooltipRoot() {
 
   const actionsEl = document.createElement("div");
   actionsEl.className = "wordwise-actions";
+  const actionIndicatorEl = document.createElement("div");
+  actionIndicatorEl.className = "wordwise-action-indicator";
+  actionIndicatorEl.dataset.visible = "false";
 
   const llmButton = document.createElement("button");
   llmButton.className = "wordwise-button wordwise-button--secondary";
@@ -1907,6 +1979,12 @@ function createTooltipRoot() {
 
   const primaryTranslationEl = document.createElement("div");
   primaryTranslationEl.className = "wordwise-primary-translation";
+  const primaryTranslationTextEl = document.createElement("span");
+  primaryTranslationTextEl.className = "wordwise-primary-translation-text";
+  const primaryTranslationPosEl = document.createElement("span");
+  primaryTranslationPosEl.className = "wordwise-primary-translation-pos";
+  primaryTranslationPosEl.dataset.visible = "false";
+  primaryTranslationEl.append(primaryTranslationTextEl, primaryTranslationPosEl);
 
   const secondaryTranslationEl = document.createElement("div");
   secondaryTranslationEl.className = "wordwise-secondary-translation";
@@ -2025,7 +2103,7 @@ function createTooltipRoot() {
   analysisTranslationSection.append(analysisTranslationLabel, analysisTranslationCardRow);
 
   translationEl.append(primaryTranslationEl, secondaryTranslationEl, englishExplanationEl);
-  actionsEl.append(llmButton, selectionAnalysisButton, ignoreButton, button);
+  actionsEl.append(actionIndicatorEl, llmButton, selectionAnalysisButton, ignoreButton, button);
   metaEl.append(hintEl, metaDividerEl, rankEl);
   wordView.append(surfaceHeaderEl, pronunciationEl, translationEl, actionsEl, metaEl);
   analysisHeader.append(analysisTitleEl, analysisTriggerButton);
@@ -2057,11 +2135,15 @@ function createTooltipRoot() {
     hintEl,
     translationEl,
     primaryTranslationEl,
+    primaryTranslationTextEl,
+    primaryTranslationPosEl,
     secondaryTranslationEl,
     englishExplanationEl,
     englishExplanationTextEl,
     rankEl,
     metaEl,
+    actionsEl,
+    actionIndicatorEl,
     button,
     llmButton,
     britishButton,
@@ -2406,6 +2488,51 @@ function resetEnglishExplanationDisplay() {
   tooltip.englishExplanationTextEl.textContent = "";
 }
 
+function setPrimaryTranslationContent(
+  translation?: string,
+  contextualPartOfSpeech?: string,
+  provider?: string,
+) {
+  tooltip.primaryTranslationTextEl.textContent = translation ?? "";
+  const pos = provider === "deepseek-chat" ? contextualPartOfSpeech ?? "" : "";
+  tooltip.primaryTranslationPosEl.textContent = pos;
+  tooltip.primaryTranslationPosEl.dataset.visible = pos ? "true" : "false";
+}
+
+function setWordActionIndicator(target?: HTMLButtonElement | null) {
+  if (tooltip.wordView.dataset.layout !== "word") {
+    tooltip.actionIndicatorEl.dataset.visible = "false";
+    return;
+  }
+
+  const button = target ?? tooltip.button;
+
+  if (button.style.display === "none") {
+    tooltip.actionIndicatorEl.dataset.visible = "false";
+    return;
+  }
+
+  const actionsRect = tooltip.actionsEl.getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
+
+  if (!actionsRect.width || !buttonRect.width) {
+    tooltip.actionIndicatorEl.dataset.visible = "false";
+    return;
+  }
+
+  tooltip.actionsEl.style.setProperty("--wordwise-action-indicator-x", `${buttonRect.left - actionsRect.left}px`);
+  tooltip.actionsEl.style.setProperty("--wordwise-action-indicator-y", `${buttonRect.top - actionsRect.top}px`);
+  tooltip.actionsEl.style.setProperty("--wordwise-action-indicator-width", `${buttonRect.width}px`);
+  tooltip.actionsEl.style.setProperty("--wordwise-action-indicator-height", `${buttonRect.height}px`);
+  tooltip.actionIndicatorEl.dataset.visible = "true";
+}
+
+function syncWordActionIndicator(target?: HTMLButtonElement | null) {
+  requestAnimationFrame(() => {
+    setWordActionIndicator(target);
+  });
+}
+
 function showEnglishExplanation(explanation: string) {
   tooltip.englishExplanationTextEl.textContent = explanation;
   tooltip.englishExplanationEl.dataset.visible = "true";
@@ -2555,6 +2682,7 @@ function setWordTooltipControls(mode: "word" | "selection") {
   tooltip.britishButton.dataset.playing = "false";
   tooltip.americanButton.dataset.playing = "false";
   tooltip.selectionAnalysisButton.style.display = isSelection ? "inline-flex" : "none";
+  syncWordActionIndicator();
 }
 
 function resetPronunciationDisplay(surface: string) {
@@ -2620,7 +2748,7 @@ function renderSelectionTooltip(
   tooltip.surfaceEl.textContent = "";
   tooltip.surfacePosEl.textContent = "";
   tooltip.surfacePosEl.dataset.visible = "false";
-  tooltip.primaryTranslationEl.textContent = result?.translation ?? "";
+  setPrimaryTranslationContent(result?.translation, undefined, result?.translationProvider);
   tooltip.secondaryTranslationEl.textContent = result?.sentenceTranslation ?? "";
   tooltip.secondaryTranslationEl.dataset.visible = result?.sentenceTranslation ? "true" : "false";
   resetEnglishExplanationDisplay();
@@ -2726,7 +2854,11 @@ function renderTooltip(result: LexiconLookupResult, rect: DOMRect) {
   tooltip.surfaceEl.textContent = result.surface;
   tooltip.surfacePosEl.textContent = result.partOfSpeech ?? "";
   tooltip.surfacePosEl.dataset.visible = result.partOfSpeech ? "true" : "false";
-  tooltip.primaryTranslationEl.textContent = result.translation ?? "";
+  setPrimaryTranslationContent(
+    result.translation,
+    result.contextualPartOfSpeech,
+    result.translationProvider,
+  );
   tooltip.secondaryTranslationEl.textContent = result.sentenceTranslation ?? "";
   tooltip.secondaryTranslationEl.dataset.visible = result.sentenceTranslation ? "true" : "false";
   resetEnglishExplanationDisplay();
@@ -2969,7 +3101,7 @@ async function requestTranslation(provider: TranslationProviderChoice) {
   if (!preservingPreviousResult) {
     tooltip.translationEl.dataset.visible = "false";
     tooltip.translationEl.dataset.compact = "false";
-    tooltip.primaryTranslationEl.textContent = "";
+    setPrimaryTranslationContent();
     tooltip.secondaryTranslationEl.textContent = "";
     tooltip.secondaryTranslationEl.dataset.visible = "false";
     resetEnglishExplanationDisplay();
@@ -3017,9 +3149,10 @@ async function requestTranslation(provider: TranslationProviderChoice) {
     return;
   }
 
-  activeResult = response.result;
+  const result = response.result;
+  activeResult = result;
   await animateTranslationSwap(() => {
-    renderTooltip(response.result, requestContext.rect);
+    renderTooltip(result, requestContext.rect);
   });
 }
 
@@ -3086,11 +3219,12 @@ async function requestSelectionTranslation(
     return;
   }
 
+  const result = response.result;
   await animateTranslationSwap(() => {
     renderSelectionTooltip(context, {
-      translation: response.result.translation,
-      sentenceTranslation: response.result.sentenceTranslation,
-      translationProvider: response.result.translationProvider,
+      translation: result.translation,
+      sentenceTranslation: result.sentenceTranslation,
+      translationProvider: result.translationProvider,
     });
   });
 }
@@ -3416,6 +3550,19 @@ tooltip.analysisTriggerButton.addEventListener("click", async () => {
 
   suppressSelectionTriggerUntil = Date.now() + 1500;
   await requestSentenceAnalysis(activeSelectionContext);
+});
+
+[tooltip.llmButton, tooltip.ignoreButton, tooltip.button].forEach((actionButton) => {
+  actionButton.addEventListener("mouseenter", () => {
+    syncWordActionIndicator(actionButton);
+  });
+  actionButton.addEventListener("focus", () => {
+    syncWordActionIndicator(actionButton);
+  });
+});
+
+tooltip.actionsEl.addEventListener("mouseleave", () => {
+  syncWordActionIndicator();
 });
 
 tooltip.selectionAnalysisButton.addEventListener("click", async () => {
