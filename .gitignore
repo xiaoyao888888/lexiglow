@@ -2,3 +2,12 @@ dist
 node_modules
 src/generated/lexicon.ts
 .chrome-extension-key.pem
+
+# Local notes and temporary artifacts
+/.codex
+/AGENTS.md
+/1.png
+/2.png
+/3.png
+/data/BNC_COCA_lists.xlsx
+/module_notes/
