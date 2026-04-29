@@ -3,6 +3,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   buildPronunciationCandidates,
   extractPronunciation,
+  extractPronunciationFromCmudictText,
+  extractPronunciationFromKaikkiJsonl,
   extractPronunciationFromWiktionaryRaw,
   hasEnglishVoice,
   lookupBestPronunciation,
@@ -189,6 +191,25 @@ describe("pronunciation lookup fallbacks", () => {
     });
   });
 
+  test("parses structured IPA and audio from kaikki jsonl", () => {
+    expect(
+      extractPronunciationFromKaikkiJsonl(`{"sounds":[{"tags":["UK"],"ipa":"/kənˈfɪɡə(ɹ)/"},{"audio":"LL-Q1860 (eng)-Vealhurl-configure.wav","ogg_url":"https://upload.wikimedia.org/example/configure.ogg","mp3_url":"https://upload.wikimedia.org/example/configure.mp3"},{"tags":["Canada","US"],"ipa":"/kənˈfɪɡ(j)ɚ/"}]}`),
+    ).toEqual({
+      ukPhonetic: "/kənˈfɪɡə(ɹ)/",
+      usPhonetic: "/kənˈfɪɡ(j)ɚ/",
+      ukAudioUrl: "https://upload.wikimedia.org/example/configure.mp3",
+      usAudioUrl: "https://upload.wikimedia.org/example/configure.mp3",
+    });
+  });
+
+  test("converts cmudict arpabet to us ipa", () => {
+    expect(
+      extractPronunciationFromCmudictText("contextual K AA2 N T EH1 K S CH UW2 AH0 L", "contextual"),
+    ).toEqual({
+      usPhonetic: "/ˌkɑnˈtɛksˌtʃuəl/",
+    });
+  });
+
   test("falls back from inflected dictionary entries to the base-form pronunciation", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -231,9 +252,17 @@ describe("pronunciation lookup fallbacks", () => {
     });
   });
 
-  test("falls back to wiktionary audio when no IPA is available from dictionaryapi", async () => {
+  test("falls back to cmudict us ipa plus wiktionary audio when free dictionary sources have no ipa", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+
+      if (url.includes("cmudict.dict")) {
+        return textResponse("contextual K AA2 N T EH1 K S CH UW2 AH0 L");
+      }
+
+      if (url.includes("/meaning/c/co/contextual.jsonl")) {
+        return textResponse(`{"sounds":[{"audio":"LL-Q1860 (eng)-Wodencafe-contextual.wav","ogg_url":"https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f8/LL-Q1860_%28eng%29-Wodencafe-contextual.wav/LL-Q1860_%28eng%29-Wodencafe-contextual.wav.ogg","mp3_url":"https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f8/LL-Q1860_%28eng%29-Wodencafe-contextual.wav/LL-Q1860_%28eng%29-Wodencafe-contextual.wav.mp3"}]}`);
+      }
 
       if (url.includes("action=raw&title=contextual")) {
         return textResponse(`==English==
@@ -254,7 +283,7 @@ describe("pronunciation lookup fallbacks", () => {
 
     expect(result).toEqual({
       ukPhonetic: undefined,
-      usPhonetic: undefined,
+      usPhonetic: "/ˌkɑnˈtɛksˌtʃuəl/",
       ukAudioUrl: undefined,
       usAudioUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/LL-Q1860%20(eng)-Wodencafe-contextual.wav",
     });

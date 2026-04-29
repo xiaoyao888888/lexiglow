@@ -31,9 +31,154 @@ type FetchLike = (
 }>;
 
 const PRONUNCIATION_REQUEST_TIMEOUT_MS = 2500;
+const CMUDICT_REQUEST_TIMEOUT_MS = 8000;
 const DICTIONARY_API_BASE_URL = "https://api.dictionaryapi.dev/api/v2/entries/en";
+const KAIKKI_JSONL_BASE_URL = "https://kaikki.org/dictionary/English/meaning";
 const WIKTIONARY_RAW_PAGE_URL = "https://en.wiktionary.org/w/index.php?action=raw&title=";
 const WIKIMEDIA_FILE_PATH_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/";
+const CMUDICT_SOURCE_URLS = [
+  "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict",
+  "https://cdn.jsdelivr.net/gh/cmusphinx/cmudict@master/cmudict.dict",
+];
+
+const CMUDICT_VOWELS = new Set([
+  "AA",
+  "AE",
+  "AH",
+  "AO",
+  "AW",
+  "AX",
+  "AXR",
+  "AY",
+  "EH",
+  "ER",
+  "EY",
+  "IH",
+  "IX",
+  "IY",
+  "OW",
+  "OY",
+  "UH",
+  "UW",
+  "UX",
+]);
+
+const CMUDICT_SINGLE_ONSETS = new Set([
+  "B",
+  "CH",
+  "D",
+  "DH",
+  "F",
+  "G",
+  "HH",
+  "JH",
+  "K",
+  "L",
+  "M",
+  "N",
+  "P",
+  "R",
+  "S",
+  "SH",
+  "T",
+  "TH",
+  "V",
+  "W",
+  "Y",
+  "Z",
+  "ZH",
+]);
+
+const CMUDICT_COMPLEX_ONSETS = new Set([
+  "B L",
+  "B R",
+  "D R",
+  "D W",
+  "F L",
+  "F R",
+  "F Y",
+  "G L",
+  "G R",
+  "G W",
+  "HH Y",
+  "K L",
+  "K R",
+  "K W",
+  "K Y",
+  "M Y",
+  "N Y",
+  "P L",
+  "P R",
+  "P Y",
+  "S F",
+  "S K",
+  "S L",
+  "S M",
+  "S N",
+  "S P",
+  "S T",
+  "S W",
+  "SH R",
+  "T R",
+  "T W",
+  "TH R",
+  "V Y",
+]);
+
+const CMUDICT_IPA_MAP = new Map<string, string>([
+  ["AA", "ɑ"],
+  ["AE", "æ"],
+  ["AO", "ɔ"],
+  ["AW", "aʊ"],
+  ["AY", "aɪ"],
+  ["B", "b"],
+  ["CH", "tʃ"],
+  ["D", "d"],
+  ["DH", "ð"],
+  ["EH", "ɛ"],
+  ["EY", "eɪ"],
+  ["F", "f"],
+  ["G", "ɡ"],
+  ["HH", "h"],
+  ["IH", "ɪ"],
+  ["IY", "i"],
+  ["JH", "dʒ"],
+  ["K", "k"],
+  ["L", "l"],
+  ["M", "m"],
+  ["N", "n"],
+  ["NG", "ŋ"],
+  ["OW", "oʊ"],
+  ["OY", "ɔɪ"],
+  ["P", "p"],
+  ["R", "ɹ"],
+  ["S", "s"],
+  ["SH", "ʃ"],
+  ["T", "t"],
+  ["TH", "θ"],
+  ["UH", "ʊ"],
+  ["UW", "u"],
+  ["V", "v"],
+  ["W", "w"],
+  ["Y", "j"],
+  ["Z", "z"],
+  ["ZH", "ʒ"],
+]);
+
+interface KaikkiSoundLike {
+  ipa?: string;
+  tags?: string[];
+  audio?: string;
+  ogg_url?: string;
+  mp3_url?: string;
+}
+
+interface KaikkiEntryLike {
+  sounds?: KaikkiSoundLike[];
+}
+
+let cmudictTextPromise: Promise<string | null> | null = null;
+const cmudictLookupCache = new Map<string, string | null>();
 
 function normalizeLang(lang: string | undefined): string {
   return (lang ?? "").trim().toLowerCase();
@@ -201,6 +346,17 @@ function mergePronunciationData(
   const primaryLooksGeneric =
     Boolean(primary.ukPhonetic) &&
     primary.ukPhonetic === primary.usPhonetic;
+  const primaryHasGenericAudio =
+    Boolean(primary.ukAudioUrl) &&
+    primary.ukAudioUrl === primary.usAudioUrl;
+
+  let ukAudioUrl = primary.ukAudioUrl ?? fallback.ukAudioUrl;
+  let usAudioUrl = primary.usAudioUrl ?? fallback.usAudioUrl;
+
+  if (primaryHasGenericAudio && (fallback.ukAudioUrl || fallback.usAudioUrl)) {
+    ukAudioUrl = fallback.ukAudioUrl ?? (fallback.usAudioUrl ? undefined : primary.ukAudioUrl);
+    usAudioUrl = fallback.usAudioUrl ?? (fallback.ukAudioUrl ? undefined : primary.usAudioUrl);
+  }
 
   return {
     ukPhonetic: primaryLooksGeneric
@@ -209,8 +365,8 @@ function mergePronunciationData(
     usPhonetic: primaryLooksGeneric
       ? fallback.usPhonetic ?? primary.usPhonetic
       : primary.usPhonetic ?? fallback.usPhonetic,
-    ukAudioUrl: primary.ukAudioUrl ?? fallback.ukAudioUrl,
-    usAudioUrl: primary.usAudioUrl ?? fallback.usAudioUrl,
+    ukAudioUrl,
+    usAudioUrl,
   };
 }
 
@@ -363,11 +519,11 @@ function resolveWiktionaryAccentHint(value: string | undefined): PronunciationAc
     return undefined;
   }
 
-  if (/\b(us|u\.s\.|ga|general american|american|canada|canadian)\b/.test(normalized)) {
+  if (/\b(us|u\.s\.|ga|general[- ]american|american|canada|canadian)\b/.test(normalized)) {
     return "en-US";
   }
 
-  if (/\b(uk|u\.k\.|rp|british|gb|england|southern england|received pronunciation)\b/.test(normalized)) {
+  if (/\b(uk|u\.k\.|rp|british|gb|england|southern[- ]england|received[- ]pronunciation)\b/.test(normalized)) {
     return "en-GB";
   }
 
@@ -460,14 +616,243 @@ export function extractPronunciationFromWiktionaryRaw(raw: string): Pronunciatio
   };
 }
 
+function buildKaikkiJsonlUrl(query: string): string {
+  const normalized = query.trim().toLowerCase();
+
+  return `${KAIKKI_JSONL_BASE_URL}/${encodeURIComponent(normalized.slice(0, 1))}/${encodeURIComponent(normalized.slice(0, 2))}/${encodeURIComponent(normalized)}.jsonl`;
+}
+
+function pickKaikkiAudioUrl(sound: KaikkiSoundLike): string | undefined {
+  if (typeof sound.mp3_url === "string" && sound.mp3_url.trim()) {
+    return sound.mp3_url.trim();
+  }
+
+  if (typeof sound.ogg_url === "string" && sound.ogg_url.trim()) {
+    return sound.ogg_url.trim();
+  }
+
+  if (typeof sound.audio === "string" && sound.audio.trim()) {
+    return toWikimediaFileUrl(sound.audio);
+  }
+
+  return undefined;
+}
+
+export function extractPronunciationFromKaikkiJsonl(raw: string): PronunciationData {
+  let genericPhonetic: string | undefined;
+  let ukPhonetic: string | undefined;
+  let usPhonetic: string | undefined;
+  let genericAudioUrl: string | undefined;
+  let ukAudioUrl: string | undefined;
+  let usAudioUrl: string | undefined;
+
+  for (const line of raw.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
+    let entry: KaikkiEntryLike | null = null;
+
+    try {
+      entry = JSON.parse(line) as KaikkiEntryLike;
+    } catch {
+      entry = null;
+    }
+
+    const sounds = Array.isArray(entry?.sounds) ? entry.sounds : [];
+
+    for (const sound of sounds) {
+      const accent = resolveWiktionaryAccentHint(Array.isArray(sound.tags) ? sound.tags.join(", ") : undefined);
+      const phonetic = normalizePhoneticText(typeof sound.ipa === "string" ? sound.ipa : undefined);
+      const audioUrl = pickKaikkiAudioUrl(sound);
+
+      if (phonetic) {
+        if (accent === "en-GB") {
+          ukPhonetic ??= phonetic;
+        } else if (accent === "en-US") {
+          usPhonetic ??= phonetic;
+        } else {
+          genericPhonetic ??= phonetic;
+        }
+      }
+
+      if (audioUrl) {
+        if (accent === "en-GB") {
+          ukAudioUrl ??= audioUrl;
+        } else if (accent === "en-US") {
+          usAudioUrl ??= audioUrl;
+        } else {
+          genericAudioUrl ??= audioUrl;
+        }
+      }
+    }
+  }
+
+  return {
+    ukPhonetic: ukPhonetic ?? genericPhonetic,
+    usPhonetic: usPhonetic ?? genericPhonetic,
+    ukAudioUrl: ukAudioUrl ?? genericAudioUrl,
+    usAudioUrl: usAudioUrl ?? genericAudioUrl,
+  };
+}
+
+function parseArpabetToken(token: string): {
+  phoneme: string;
+  stress?: string;
+} {
+  const match = token.trim().toUpperCase().match(/^([A-Z]+)([012])?$/);
+
+  if (!match) {
+    return { phoneme: token.trim().toUpperCase() };
+  }
+
+  return {
+    phoneme: match[1] ?? "",
+    stress: match[2],
+  };
+}
+
+function isCmudictVowel(token: string): boolean {
+  return CMUDICT_VOWELS.has(parseArpabetToken(token).phoneme);
+}
+
+function isLegalCmudictOnset(cluster: string[]): boolean {
+  if (!cluster.length) {
+    return true;
+  }
+
+  const normalized = cluster.map((token) => parseArpabetToken(token).phoneme);
+
+  if (normalized.length === 1) {
+    return CMUDICT_SINGLE_ONSETS.has(normalized[0] ?? "");
+  }
+
+  return CMUDICT_COMPLEX_ONSETS.has(normalized.join(" "));
+}
+
+function splitCmudictCluster(cluster: string[]): {
+  coda: string[];
+  onset: string[];
+} {
+  for (let onsetLength = Math.min(3, cluster.length); onsetLength >= 0; onsetLength -= 1) {
+    const onset = cluster.slice(cluster.length - onsetLength);
+
+    if (isLegalCmudictOnset(onset)) {
+      return {
+        coda: cluster.slice(0, cluster.length - onsetLength),
+        onset,
+      };
+    }
+  }
+
+  return {
+    coda: cluster,
+    onset: [],
+  };
+}
+
+function toCmudictIpaPhoneme(token: string): string | undefined {
+  const { phoneme, stress } = parseArpabetToken(token);
+
+  if (phoneme === "AH") {
+    return stress === "0" ? "ə" : "ʌ";
+  }
+
+  if (phoneme === "AX") {
+    return "ə";
+  }
+
+  if (phoneme === "AXR") {
+    return "ɚ";
+  }
+
+  if (phoneme === "ER") {
+    return stress === "0" ? "ɚ" : "ɝ";
+  }
+
+  if (phoneme === "IX") {
+    return "ɨ";
+  }
+
+  if (phoneme === "UX") {
+    return "ʉ";
+  }
+
+  return CMUDICT_IPA_MAP.get(phoneme);
+}
+
+function arpabetToIpa(value: string): string | undefined {
+  const tokens = value.trim().split(/\s+/).filter(Boolean);
+  const vowelIndices = tokens
+    .map((token, index) => (isCmudictVowel(token) ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (!tokens.length || !vowelIndices.length) {
+    return undefined;
+  }
+
+  const syllables: Array<{
+    stress?: string;
+    tokens: string[];
+  }> = [];
+  let onset = tokens.slice(0, vowelIndices[0]);
+
+  vowelIndices.forEach((vowelIndex, index) => {
+    const nextVowelIndex = vowelIndices[index + 1];
+    const between = nextVowelIndex === undefined
+      ? tokens.slice(vowelIndex + 1)
+      : tokens.slice(vowelIndex + 1, nextVowelIndex);
+
+    let coda = between;
+    let nextOnset: string[] = [];
+
+    if (nextVowelIndex !== undefined) {
+      const split = splitCmudictCluster(between);
+      coda = split.coda;
+      nextOnset = split.onset;
+    }
+
+    syllables.push({
+      stress: parseArpabetToken(tokens[vowelIndex] ?? "").stress,
+      tokens: [...onset, tokens[vowelIndex] ?? "", ...coda],
+    });
+
+    onset = nextOnset;
+  });
+
+  const ipa = syllables.map((syllable) => {
+    const stressMarker = syllable.stress === "1"
+      ? "ˈ"
+      : syllable.stress === "2"
+        ? "ˌ"
+        : "";
+    const body = syllable.tokens
+      .map((token) => toCmudictIpaPhoneme(token))
+      .filter((token): token is string => Boolean(token))
+      .join("");
+
+    return `${stressMarker}${body}`;
+  }).join("");
+
+  return ipa || undefined;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function extractPronunciationFromCmudictText(raw: string, query: string): PronunciationData {
+  const match = raw.match(new RegExp(`^${escapeRegex(query.toLowerCase())}(?:\\(\\d+\\))?\\s+(.+)$`, "m"));
+  const usPhonetic = normalizePhoneticText(arpabetToIpa(match?.[1] ?? ""));
+
+  return usPhonetic ? { usPhonetic } : {};
+}
+
 async function fetchWithTimeout(
   fetchFn: FetchLike,
   input: string,
+  timeoutMs = PRONUNCIATION_REQUEST_TIMEOUT_MS,
 ): Promise<Awaited<ReturnType<FetchLike>> | null> {
   const controller = new AbortController();
   const timeoutId = globalThis.setTimeout(() => {
     controller.abort();
-  }, PRONUNCIATION_REQUEST_TIMEOUT_MS);
+  }, timeoutMs);
 
   try {
     return await fetchFn(input, { signal: controller.signal });
@@ -502,6 +887,30 @@ async function lookupDictionaryApiPronunciation(
   return hasPronunciationData(result) ? result : null;
 }
 
+async function lookupKaikkiPronunciation(
+  query: string,
+  fetchFn: FetchLike,
+): Promise<PronunciationData | null> {
+  const response = await fetchWithTimeout(
+    fetchFn,
+    buildKaikkiJsonlUrl(query),
+  );
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  const raw = await response.text().catch(() => "");
+
+  if (!raw.trim()) {
+    return null;
+  }
+
+  const result = extractPronunciationFromKaikkiJsonl(raw);
+
+  return hasPronunciationData(result) ? result : null;
+}
+
 async function lookupWiktionaryPronunciation(
   query: string,
   fetchFn: FetchLike,
@@ -524,6 +933,74 @@ async function lookupWiktionaryPronunciation(
   const result = extractPronunciationFromWiktionaryRaw(raw);
 
   return hasPronunciationData(result) ? result : null;
+}
+
+async function loadCmudictText(fetchFn: FetchLike): Promise<string | null> {
+  if (fetchFn === fetch) {
+    cmudictTextPromise ??= (async () => {
+      for (const url of CMUDICT_SOURCE_URLS) {
+        const response = await fetchWithTimeout(fetchFn, url, CMUDICT_REQUEST_TIMEOUT_MS);
+
+        if (!response?.ok) {
+          continue;
+        }
+
+        const raw = await response.text().catch(() => "");
+
+        if (raw.trim()) {
+          return raw;
+        }
+      }
+
+      return null;
+    })();
+
+    return cmudictTextPromise;
+  }
+
+  for (const url of CMUDICT_SOURCE_URLS) {
+    const response = await fetchWithTimeout(fetchFn, url, CMUDICT_REQUEST_TIMEOUT_MS);
+
+    if (!response?.ok) {
+      continue;
+    }
+
+    const raw = await response.text().catch(() => "");
+
+    if (raw.trim()) {
+      return raw;
+    }
+  }
+
+  return null;
+}
+
+async function lookupCmudictPronunciation(
+  query: string,
+  fetchFn: FetchLike,
+): Promise<PronunciationData | null> {
+  if (fetchFn === fetch && cmudictLookupCache.has(query)) {
+    const cached = cmudictLookupCache.get(query);
+    return cached ? { usPhonetic: cached } : null;
+  }
+
+  const raw = await loadCmudictText(fetchFn);
+
+  if (!raw) {
+    if (fetchFn === fetch) {
+      cmudictLookupCache.set(query, null);
+    }
+
+    return null;
+  }
+
+  const result = extractPronunciationFromCmudictText(raw, query);
+
+  if (fetchFn === fetch) {
+    cmudictLookupCache.set(query, result.usPhonetic ?? null);
+  }
+
+  return hasPhoneticData(result) ? result : null;
 }
 
 interface PronunciationLookupHit {
@@ -579,12 +1056,28 @@ export async function lookupBestPronunciation(
   }
 
   if (bestDictionary && hasPhoneticData(bestDictionary.result)) {
+    const kaikkiResult = await lookupKaikkiPronunciation(bestDictionary.query, fetchFn);
+    const withKaikki = kaikkiResult
+      ? mergePronunciationData(bestDictionary.result, kaikkiResult)
+      : bestDictionary.result;
     const wiktionaryResult = await lookupWiktionaryPronunciation(bestDictionary.query, fetchFn);
 
     return wiktionaryResult
-      ? mergePronunciationData(bestDictionary.result, wiktionaryResult)
-      : bestDictionary.result;
+      ? mergePronunciationData(withKaikki, wiktionaryResult)
+      : withKaikki;
   }
+
+  const kaikkiHits = (await Promise.all(candidates.map(async (query, candidateIndex) => {
+    const result = await lookupKaikkiPronunciation(query, fetchFn);
+
+    return result
+      ? {
+        candidateIndex,
+        query,
+        result,
+      }
+      : null;
+  }))).filter((item): item is PronunciationLookupHit => Boolean(item));
 
   const wiktionaryHits = (await Promise.all(candidates.map(async (query, candidateIndex) => {
     const result = await lookupWiktionaryPronunciation(query, fetchFn);
@@ -600,7 +1093,47 @@ export async function lookupBestPronunciation(
 
   let bestResult = bestDictionary;
 
+  for (const hit of kaikkiHits) {
+    bestResult = pickBetterPronunciationHit(bestResult, hit);
+  }
+
   for (const hit of wiktionaryHits) {
+    if (bestResult && hit.query === bestResult.query) {
+      bestResult = {
+        ...bestResult,
+        result: mergePronunciationData(bestResult.result, hit.result),
+      };
+      continue;
+    }
+
+    bestResult = pickBetterPronunciationHit(bestResult, hit);
+  }
+
+  if (bestResult && hasPhoneticData(bestResult.result)) {
+    return bestResult.result;
+  }
+
+  const cmudictHits = (await Promise.all(candidates.map(async (query, candidateIndex) => {
+    const result = await lookupCmudictPronunciation(query, fetchFn);
+
+    return result
+      ? {
+        candidateIndex,
+        query,
+        result,
+      }
+      : null;
+  }))).filter((item): item is PronunciationLookupHit => Boolean(item));
+
+  for (const hit of cmudictHits) {
+    if (bestResult && hit.query === bestResult.query) {
+      bestResult = {
+        ...bestResult,
+        result: mergePronunciationData(bestResult.result, hit.result),
+      };
+      continue;
+    }
+
     bestResult = pickBetterPronunciationHit(bestResult, hit);
   }
 

@@ -2975,8 +2975,12 @@ function setWordTooltipControls(mode: "word" | "selection") {
   syncActionIndicator();
 }
 
-function formatPronunciationDisplayText(value?: string): string {
-  return value ?? "No IPA";
+function formatPronunciationDisplayText(value?: string, audioUrl?: string): string {
+  if (value) {
+    return value;
+  }
+
+  return audioUrl ? "Audio only" : "No IPA";
 }
 
 function resetPronunciationDisplay(surface: string) {
@@ -3023,8 +3027,14 @@ async function loadPronunciation(surface: string) {
   }
 
   activePronunciationResult = response.result ?? null;
-  tooltip.britishPhoneticEl.textContent = formatPronunciationDisplayText(response.result?.ukPhonetic);
-  tooltip.americanPhoneticEl.textContent = formatPronunciationDisplayText(response.result?.usPhonetic);
+  tooltip.britishPhoneticEl.textContent = formatPronunciationDisplayText(
+    response.result?.ukPhonetic,
+    response.result?.ukAudioUrl,
+  );
+  tooltip.americanPhoneticEl.textContent = formatPronunciationDisplayText(
+    response.result?.usPhonetic,
+    response.result?.usAudioUrl,
+  );
 }
 
 function renderSelectionTooltip(
