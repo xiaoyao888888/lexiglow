@@ -65,6 +65,8 @@ const TOOLTIP_STYLE = `
     --wordwise-translation-font: "SF Pro Display", "SF Pro Text", "SF Pro SC", "PingFang SC",
       "Hiragino Sans GB", "Microsoft YaHei UI", "Segoe UI", -apple-system, BlinkMacSystemFont,
       sans-serif;
+    --wordwise-selection-paper-font: "Iowan Old Style", "Palatino Linotype", "Noto Serif SC",
+      "Source Han Serif SC", "Songti SC", "STSong", "Times New Roman", serif;
     --wordwise-selection-translation-size: 16.4px;
     --wordwise-selection-secondary-size: 13px;
     --wordwise-selection-line-height: 1.74;
@@ -116,6 +118,22 @@ const TOOLTIP_STYLE = `
   .wordwise-card[data-layout="selection"][data-mode="word"] {
     min-width: min(320px, calc(100vw - 24px));
     max-width: min(496px, calc(100vw - 24px));
+    border-color: rgba(162, 130, 82, 0.22);
+    background:
+      radial-gradient(circle at top left, rgba(249, 232, 196, 0.32), transparent 34%),
+      linear-gradient(180deg, rgba(252, 247, 238, 0.988), rgba(244, 235, 219, 0.975));
+    box-shadow:
+      0 18px 40px rgba(48, 39, 24, 0.12),
+      0 3px 10px rgba(74, 61, 40, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  }
+  .wordwise-card[data-layout="selection"][data-mode="word"] .wordwise-close {
+    background: rgba(112, 83, 40, 0.08);
+    color: #8b6c44;
+  }
+  .wordwise-card[data-layout="selection"][data-mode="word"] .wordwise-close:hover {
+    background: rgba(112, 83, 40, 0.14);
+    color: #6f5434;
   }
   .wordwise-card[data-mode="word"] {
     padding-bottom: 9px;
@@ -254,16 +272,34 @@ const TOOLTIP_STYLE = `
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-translation[data-visible="true"] {
     margin-top: 4px;
-    padding: 18px 18px 14px;
+    position: relative;
+    overflow: hidden;
+    padding: 20px 20px 16px 24px;
     border-radius: 20px;
-    border-color: rgba(198, 168, 118, 0.22);
+    border-color: rgba(169, 136, 87, 0.22);
     background:
-      radial-gradient(circle at top right, rgba(255, 236, 199, 0.28), transparent 28%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.985), rgba(250, 246, 239, 0.96) 52%, rgba(243, 237, 228, 0.94));
+      repeating-linear-gradient(
+        180deg,
+        rgba(166, 136, 89, 0.035) 0,
+        rgba(166, 136, 89, 0.035) 1px,
+        transparent 1px,
+        transparent 28px
+      ),
+      radial-gradient(circle at top right, rgba(253, 234, 196, 0.3), transparent 30%),
+      linear-gradient(145deg, rgba(255, 253, 248, 0.992), rgba(248, 242, 231, 0.972) 54%, rgba(241, 231, 214, 0.952));
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.84),
-      inset 0 -1px 0 rgba(198, 168, 118, 0.06),
-      0 12px 28px rgba(148, 163, 184, 0.12);
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      inset 0 -1px 0 rgba(169, 136, 87, 0.06),
+      0 12px 28px rgba(86, 69, 43, 0.1);
+  }
+  .wordwise-word-view[data-layout="selection"] .wordwise-translation[data-visible="true"]::before {
+    content: "";
+    position: absolute;
+    left: 12px;
+    top: 18px;
+    bottom: 16px;
+    width: 1px;
+    background: linear-gradient(180deg, rgba(170, 136, 84, 0.08), rgba(170, 136, 84, 0.52), rgba(170, 136, 84, 0.08));
   }
   .wordwise-translation[data-transition="loading"] {
     opacity: 0.68;
@@ -312,17 +348,17 @@ const TOOLTIP_STYLE = `
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-primary-translation {
     display: grid;
-    gap: 7px;
+    gap: 9px;
     font-size: var(--wordwise-selection-translation-size);
     line-height: var(--wordwise-selection-line-height);
-    color: #203248;
-    font-weight: 590;
-    letter-spacing: 0.01em;
+    color: #433221;
+    font-weight: 500;
+    letter-spacing: 0.012em;
     text-wrap: pretty;
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-primary-translation-text {
     display: block;
-    font-family: var(--wordwise-translation-font);
+    font-family: var(--wordwise-selection-paper-font);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     color: inherit;
@@ -331,13 +367,13 @@ const TOOLTIP_STYLE = `
     display: inline-flex;
     align-items: center;
     width: fit-content;
-    padding: 4px 9px;
+    padding: 0;
     border-radius: 999px;
-    background: rgba(207, 181, 136, 0.14);
-    color: #7b6747;
-    font-size: 10.5px;
+    background: transparent;
+    color: #8f7350;
+    font-size: 10px;
     line-height: 1;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.08em;
   }
   .wordwise-secondary-translation {
     font-size: 12px;
@@ -354,11 +390,11 @@ const TOOLTIP_STYLE = `
   .wordwise-word-view[data-layout="selection"] .wordwise-secondary-translation {
     margin-top: 13px;
     padding-top: 12px;
-    font-family: var(--wordwise-ui-font);
+    font-family: var(--wordwise-selection-paper-font);
     font-size: var(--wordwise-selection-secondary-size);
-    line-height: 1.76;
-    color: #607287;
-    border-top-color: rgba(198, 168, 118, 0.18);
+    line-height: 1.8;
+    color: #786652;
+    border-top-color: rgba(169, 136, 87, 0.18);
     text-wrap: pretty;
   }
   .wordwise-english-explanation {
@@ -491,54 +527,62 @@ const TOOLTIP_STYLE = `
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-actions {
     gap: 6px;
-    margin-top: 6px;
+    margin-top: 8px;
     padding: 0;
     border: 0;
     background: transparent;
     box-shadow: none;
     width: 100%;
   }
+  .wordwise-word-view[data-layout="selection"] .wordwise-action-indicator {
+    background: rgba(255, 251, 242, 0.92);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 1px 3px rgba(95, 73, 42, 0.06),
+      0 4px 10px rgba(169, 136, 87, 0.08);
+  }
   .wordwise-word-view[data-layout="selection"] .wordwise-button {
     position: relative;
     z-index: 1;
-    min-height: 30px;
-    min-width: 84px;
-    padding: 0 12px;
+    min-height: 29px;
+    min-width: 82px;
+    padding: 0 11px;
     border-radius: 999px;
-    font-size: 10.5px;
-    font-weight: 580;
-    letter-spacing: 0.01em;
-    color: #53657a;
-    background: rgba(255, 255, 255, 0.84);
-    border-color: rgba(198, 168, 118, 0.16);
+    font-size: 10px;
+    font-weight: 560;
+    letter-spacing: 0.05em;
+    color: #735c3f;
+    background: rgba(255, 251, 242, 0.78);
+    border-color: rgba(169, 136, 87, 0.14);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.78),
-      0 1px 2px rgba(148, 163, 184, 0.06);
+      inset 0 1px 0 rgba(255, 255, 255, 0.76),
+      0 1px 2px rgba(95, 73, 42, 0.04);
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-button--secondary {
-    background: rgba(255, 255, 255, 0.84);
-    color: #5c6f84;
-    border-color: rgba(198, 168, 118, 0.14);
+    background: rgba(255, 251, 242, 0.76);
+    color: #78634a;
+    border-color: rgba(169, 136, 87, 0.12);
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-button:hover {
     transform: translateY(0);
-    background: rgba(255, 255, 255, 0.96);
-    border-color: rgba(198, 168, 118, 0.24);
-    color: #38506b;
+    background: rgba(255, 252, 246, 0.98);
+    border-color: rgba(169, 136, 87, 0.22);
+    color: #604b32;
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-meta {
     justify-content: flex-start;
     gap: 6px;
-    margin-top: 12px;
+    margin-top: 14px;
     padding-top: 11px;
-    border-top-color: rgba(198, 168, 118, 0.15);
+    border-top-color: rgba(169, 136, 87, 0.16);
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-hint {
-    font-size: 11px;
-    line-height: 1.35;
-    color: #8b7353;
-    letter-spacing: 0.02em;
+    font-size: 10.5px;
+    line-height: 1.42;
+    color: #8b7453;
+    letter-spacing: 0.05em;
     text-align: left;
+    text-transform: uppercase;
   }
   .wordwise-meta {
     display: flex;
