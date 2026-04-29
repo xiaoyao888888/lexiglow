@@ -216,6 +216,7 @@ describe("llm provider requests", () => {
     const payload = JSON.parse(String(request.body)) as {
       messages: Array<{ role: string; content: string }>;
       model: string;
+      chat_template_kwargs?: { enable_thinking?: boolean };
       response_format?: unknown;
     };
 
@@ -227,7 +228,50 @@ describe("llm provider requests", () => {
       "Keep person names, usernames, brand names, and product names in their original English form",
     );
     expect(payload.messages.at(-1)?.content).toContain("selected_text: preserves");
+    expect(payload.chat_template_kwargs).toBeUndefined();
     expect(payload.response_format).toBeUndefined();
+  });
+
+  test("disables thinking for qwen3 openai-compatible requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: '{"word":"保留"}',
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await translateSelectionWithLlm({
+      text: "preserves",
+      contextText: "Codex sync preserves non-managed config.toml content.",
+      settings: sanitizeTranslatorSettings({
+        llmProvider: "openai",
+        providerBaseUrl: "https://gpustack.rock-chips.com/v1",
+        providerModel: "qwen3.5-397b-a17b",
+        apiKey: "gpustack-key",
+        learnerLanguageCode: "zh-CN",
+      }),
+    });
+
+    expect(result.translation).toBe("保留");
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const payload = JSON.parse(String(request.body)) as {
+      model: string;
+      chat_template_kwargs?: { enable_thinking?: boolean };
+    };
+
+    expect(url).toBe("https://gpustack.rock-chips.com/v1/chat/completions");
+    expect(payload.model).toBe("qwen3.5-397b-a17b");
+    expect(payload.chat_template_kwargs).toEqual({
+      enable_thinking: false,
+    });
   });
 
   test("formats gemini selection translation requests", async () => {

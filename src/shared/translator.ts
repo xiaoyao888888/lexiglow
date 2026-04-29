@@ -399,6 +399,10 @@ function resolveLlmEndpoint(settings: TranslatorSettings): string {
   }
 }
 
+function shouldDisableOpenAiCompatibleThinking(settings: TranslatorSettings): boolean {
+  return settings.llmProvider === "openai" && settings.providerModel.trim().toLowerCase().includes("qwen3");
+}
+
 async function requestLlmText({
   settings,
   systemPrompt,
@@ -469,27 +473,35 @@ async function requestLlmText({
       };
       break;
     case "openai":
+      const openAiCompatibleRequestBody: Record<string, unknown> = {
+        model: settings.providerModel,
+        temperature,
+        max_tokens: maxTokens,
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+      };
+
+      if (shouldDisableOpenAiCompatibleThinking(settings)) {
+        openAiCompatibleRequestBody.chat_template_kwargs = {
+          enable_thinking: false,
+        };
+      }
+
       init = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${settings.apiKey}`,
         },
-        body: JSON.stringify({
-          model: settings.providerModel,
-          temperature,
-          max_tokens: maxTokens,
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: userPrompt,
-            },
-          ],
-        }),
+        body: JSON.stringify(openAiCompatibleRequestBody),
       };
       break;
   }
