@@ -9,3 +9,4 @@ Read in this order:
 
 Modules:
 - [sentence_analysis](./sentence_analysis/README.md): long-sentence analysis prompt, runtime flow, validation, and current limitations
+- [tooltip_translation](./tooltip_translation/README.md): word hover tooltip, selection translation card, contextual part-of-speech, and action-row behavior

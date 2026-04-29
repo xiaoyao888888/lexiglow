@@ -52,8 +52,10 @@ const TOOLTIP_STYLE = `
   .wordwise-card {
     --wordwise-ui-font: "SF Pro Text", "SF Pro SC", "PingFang SC", "Hiragino Sans GB",
       "Microsoft YaHei UI", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
-    --wordwise-translation-font: "Iowan Old Style", "Palatino Linotype", "Baskerville",
-      "Noto Serif SC", "Songti SC", "STSong", serif;
+    --wordwise-translation-font: "SF Pro Display", "SF Pro Text", "SF Pro SC", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei UI", "Segoe UI", -apple-system, BlinkMacSystemFont,
+      sans-serif;
+    --wordwise-selection-translation-size: 15.25px;
     position: fixed;
     min-width: 220px;
     max-width: min(344px, calc(100vw - 24px));
@@ -297,17 +299,18 @@ const TOOLTIP_STYLE = `
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-primary-translation {
     display: block;
-    font-size: 15.5px;
-    line-height: 1.72;
-    color: #24364d;
-    font-weight: 560;
-    letter-spacing: 0.01em;
+    font-size: var(--wordwise-selection-translation-size);
+    line-height: 1.78;
+    color: #22354b;
+    font-weight: 540;
+    letter-spacing: 0.005em;
     text-wrap: pretty;
   }
   .wordwise-word-view[data-layout="selection"] .wordwise-primary-translation-text {
     display: block;
     font-family: var(--wordwise-translation-font);
     text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
     color: inherit;
   }
   .wordwise-secondary-translation {
@@ -325,10 +328,10 @@ const TOOLTIP_STYLE = `
   .wordwise-word-view[data-layout="selection"] .wordwise-secondary-translation {
     margin-top: 11px;
     padding-top: 10px;
-    font-family: var(--wordwise-translation-font);
-    font-size: 13px;
-    line-height: 1.68;
-    color: #6a7a8d;
+    font-family: var(--wordwise-ui-font);
+    font-size: 12.75px;
+    line-height: 1.72;
+    color: #66788d;
     border-top-color: rgba(185, 157, 112, 0.16);
     text-wrap: pretty;
   }
@@ -1306,6 +1309,7 @@ interface SentenceSelectionContext {
   rect: DOMRect;
   requestId: number;
   contextText?: string;
+  selectedFontSizePx?: number;
 }
 
 interface SelectedTextContext {
@@ -1313,6 +1317,7 @@ interface SelectedTextContext {
   rect: DOMRect;
   requestId: number;
   contextText: string;
+  selectedFontSizePx?: number;
 }
 
 function isAlphaNumeric(char: string | undefined): boolean {
@@ -2462,6 +2467,7 @@ function getSelectedTextContext(): SelectedTextContext | null {
 
   const range = selection.getRangeAt(0).cloneRange();
   const text = normalizeSelectionText(selection.toString());
+  const selectedFontSizePx = resolveSelectionFontSizePx(range);
 
   if (
     !isEnglishSelectionText(text) ||
@@ -2483,6 +2489,7 @@ function getSelectedTextContext(): SelectedTextContext | null {
     rect,
     requestId: selectionRequestId,
     contextText: getSelectionContextText(range, text),
+    selectedFontSizePx,
   };
 }
 
@@ -2498,6 +2505,43 @@ function getSelectedSentenceContext(): SentenceSelectionContext | null {
 
 function getNodeElement(node: Node): Element | null {
   return node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+}
+
+const MIN_SELECTION_TRANSLATION_FONT_SIZE_PX = 13;
+const MAX_SELECTION_TRANSLATION_FONT_SIZE_PX = 20;
+
+function clampSelectionTranslationFontSizePx(fontSizePx: number): number {
+  return Math.min(
+    MAX_SELECTION_TRANSLATION_FONT_SIZE_PX,
+    Math.max(MIN_SELECTION_TRANSLATION_FONT_SIZE_PX, fontSizePx),
+  );
+}
+
+function parsePixelSize(value: string): number | null {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveSelectionFontSizePx(range: Range): number | undefined {
+  const candidates = [
+    getNodeElement(range.startContainer),
+    getNodeElement(range.commonAncestorContainer),
+    getNodeElement(range.endContainer),
+  ];
+
+  for (const element of candidates) {
+    if (!element) {
+      continue;
+    }
+
+    const fontSizePx = parsePixelSize(window.getComputedStyle(element).fontSize);
+
+    if (fontSizePx !== null) {
+      return clampSelectionTranslationFontSizePx(fontSizePx);
+    }
+  }
+
+  return undefined;
 }
 
 function isInsideTooltip(node: Node): boolean {
@@ -2716,6 +2760,7 @@ function hideTooltip() {
   stopActivePronunciationAudio();
   clearSelectionTriggerTimer();
   tooltip.host.style.display = "none";
+  tooltip.card.style.removeProperty("--wordwise-selection-translation-size");
   tooltip.card.dataset.mode = "word";
   tooltip.card.dataset.layout = "word";
   tooltip.wordView.dataset.visible = "true";
@@ -2825,6 +2870,18 @@ function syncActionIndicator(target?: HTMLButtonElement | null) {
 function showEnglishExplanation(explanation: string) {
   tooltip.englishExplanationTextEl.textContent = explanation;
   tooltip.englishExplanationEl.dataset.visible = "true";
+}
+
+function applySelectionTypography(context?: Pick<SelectedTextContext, "selectedFontSizePx"> | null) {
+  if (context?.selectedFontSizePx) {
+    tooltip.card.style.setProperty(
+      "--wordwise-selection-translation-size",
+      `${context.selectedFontSizePx}px`,
+    );
+    return;
+  }
+
+  tooltip.card.style.removeProperty("--wordwise-selection-translation-size");
 }
 
 function setTranslationPresentation(
@@ -3049,6 +3106,7 @@ function renderSelectionTooltip(
   tooltip.wordView.dataset.visible = "true";
   tooltip.analysisView.dataset.visible = "false";
   setWordTooltipControls("selection");
+  applySelectionTypography(context);
   tooltip.surfaceEl.textContent = "";
   tooltip.surfacePosEl.textContent = "";
   tooltip.surfacePosEl.dataset.visible = "false";
@@ -3155,6 +3213,7 @@ function renderTooltip(result: LexiconLookupResult, rect: DOMRect) {
   tooltip.wordView.dataset.visible = "true";
   tooltip.analysisView.dataset.visible = "false";
   setWordTooltipControls("word");
+  applySelectionTypography(null);
   tooltip.surfaceEl.textContent = result.surface;
   tooltip.surfacePosEl.textContent = result.partOfSpeech ?? "";
   tooltip.surfacePosEl.dataset.visible = result.partOfSpeech ? "true" : "false";

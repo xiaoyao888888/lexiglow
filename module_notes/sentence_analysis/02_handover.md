@@ -23,7 +23,7 @@ Keep long-sentence analysis on a single LLM call, preserve the selection-to-anal
 - `npx vitest run tests/translator.test.ts` currently passes
 - `npm test` currently passes
 - `npm run build` currently passes
-- `npx tsc --noEmit` was rerun after pulling `295f26c`; it still fails on the old `src/background/index.ts` `cached` union-type errors and now also fails on `src/content/index.ts` response-result narrowing around sentence translation rendering
+- `npx tsc --noEmit` now passes after the tooltip translation work removed the old `src/background/index.ts` `cached` union handling and `src/content/index.ts` response-result narrowing failures
 - no real API validation was rerun during this notes refresh
 
 Observed fixed display regression sample:
@@ -38,19 +38,13 @@ Observed fixed display regression sample:
 
 - request failures are still surfaced to the user as a generic format-instability message
 - there is still no browser-level visual snapshot or DOM assertion for the brush-highlight rendering
-- repo typecheck is no longer a clean gate:
-  - `src/background/index.ts` still reports the old `cached` union-type errors
-  - `src/content/index.ts` now also reports nullable `response.result` handling errors in the translation-update path
 - the current prompt wording and tooltip hierarchy were not real-API-validated in this refresh
 
 ## Next-Step Guidance
 
-1. clear the current `npx tsc --noEmit` failures before using repo typecheck as a release gate
-   - fix the old `src/background/index.ts` `cached` union handling
-   - add explicit narrowing or local aliases for `response.result` inside the `src/content/index.ts` translation callbacks
-2. keep the fixed display regression sentence as a required rerun after each frontend clause-rendering change
-3. if visual fidelity matters further, add a browser-level screenshot or DOM-level assertion instead of relying only on string block checks
-4. rerun:
+1. keep the fixed display regression sentence as a required rerun after each frontend clause-rendering change
+2. if visual fidelity matters further, add a browser-level screenshot or DOM-level assertion instead of relying only on string block checks
+3. rerun:
    ```bash
    npx vitest run tests/translator.test.ts -t "keeps commas attached to the preceding clause in display blocks for real analysis text"
    npx vitest run tests/translator.test.ts
@@ -58,7 +52,7 @@ Observed fixed display regression sample:
    npm run build
    npx tsc --noEmit
    ```
-5. do one real API check with a temporary runner when prompt wording or parser behavior changes
+4. do one real API check with a temporary runner when prompt wording or parser behavior changes
 
 ## Important Caveats
 

@@ -69,8 +69,7 @@
   npx tsc --noEmit
   ```
   Current observed result:
-  - still fails on pre-existing `src/background/index.ts` `cached` union-type errors
-  - also now fails on `src/content/index.ts` sentence-translation response narrowing around `renderTooltip(response.result, ...)` and `renderSelectionTooltip(... response.result.* ...)`
+  - passes after the tooltip translation updates that removed the old `cached` union and `response.result` narrowing errors
 
 - Real API validation:
   - use a temporary local runner that imports `src/shared/translator.ts`
