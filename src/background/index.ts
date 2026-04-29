@@ -20,8 +20,8 @@ import type {
   UpdateBaseRankMessage,
 } from "../shared/messages";
 import {
-  extractPronunciation,
   hasEnglishVoice,
+  lookupBestPronunciation,
   selectVoiceForAccent,
 } from "../shared/pronunciation";
 import {
@@ -614,26 +614,7 @@ async function getOrLookupPronunciation(surface: string): Promise<PronunciationR
 
   if (!pending) {
     pending = (async () => {
-      const response = await fetch(
-        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(normalized)}`,
-      );
-
-      if (!response.ok) {
-        return {
-          cached: false,
-        };
-      }
-
-      const payload = (await response.json().catch(() => null)) as unknown;
-      const firstEntry = Array.isArray(payload) && payload.length > 0 ? payload[0] : null;
-
-      if (!firstEntry || typeof firstEntry !== "object") {
-        return {
-          cached: false,
-        };
-      }
-
-      const result = extractPronunciation(firstEntry as Parameters<typeof extractPronunciation>[0]);
+      const result = await lookupBestPronunciation(normalized);
 
       pronunciationCache.set(normalized, {
         ukPhonetic: result.ukPhonetic,
@@ -663,9 +644,7 @@ async function getOrLookupPronunciation(surface: string): Promise<PronunciationR
 async function handleLookupPronunciation(
   message: LookupPronunciationMessage,
 ): Promise<PronunciationLookupResponse["result"]> {
-  const surface = resolveLookupLemma(message.payload.surface) || message.payload.surface.trim();
-
-  return getOrLookupPronunciation(surface);
+  return getOrLookupPronunciation(message.payload.surface);
 }
 
 async function handleSpeakPronunciation(

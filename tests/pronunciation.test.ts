@@ -1,10 +1,33 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  buildPronunciationCandidates,
   extractPronunciation,
+  extractPronunciationFromWiktionaryRaw,
   hasEnglishVoice,
+  lookupBestPronunciation,
   selectVoiceForAccent,
 } from "../src/shared/pronunciation";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function jsonResponse(payload: unknown, ok = true) {
+  return {
+    ok,
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  };
+}
+
+function textResponse(payload: string, ok = true) {
+  return {
+    ok,
+    json: async () => null,
+    text: async () => payload,
+  };
+}
 
 describe("selectVoiceForAccent", () => {
   test("prefers exact british voices", () => {
@@ -132,6 +155,108 @@ describe("extractPronunciation", () => {
       usPhonetic: "/rɪˈsiːvd/",
       ukAudioUrl: undefined,
       usAudioUrl: undefined,
+    });
+  });
+});
+
+describe("pronunciation lookup fallbacks", () => {
+  test("prioritizes likely base-form candidates ahead of broken stems", () => {
+    expect(buildPronunciationCandidates("configured").slice(0, 2)).toEqual([
+      "configured",
+      "configure",
+    ]);
+
+    expect(buildPronunciationCandidates("preserves").slice(0, 2)).toEqual([
+      "preserves",
+      "preserve",
+    ]);
+  });
+
+  test("parses english IPA and audio from wiktionary raw pages", () => {
+    expect(
+      extractPronunciationFromWiktionaryRaw(`==English==
+
+===Pronunciation===
+* {{IPA|en|/kənˈfɪɡə(ɹ)/|a=UK}}
+** {{audio|en|LL-Q1860 (eng)-Vealhurl-configure.wav|a=Southern England}}
+* {{IPA|en|/kənˈfɪɡ(j)ɚ/|a=US,CA}}
+`),
+    ).toEqual({
+      ukPhonetic: "/kənˈfɪɡə(ɹ)/",
+      usPhonetic: "/kənˈfɪɡ(j)ɚ/",
+      ukAudioUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/LL-Q1860%20(eng)-Vealhurl-configure.wav",
+      usAudioUrl: undefined,
+    });
+  });
+
+  test("falls back from inflected dictionary entries to the base-form pronunciation", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("action=raw&title=configure")) {
+        return textResponse(`==English==
+
+===Pronunciation===
+* {{IPA|en|/kənˈfɪɡə(ɹ)/|a=UK}}
+** {{audio|en|LL-Q1860 (eng)-Vealhurl-configure.wav|a=Southern England}}
+* {{IPA|en|/kənˈfɪɡ(j)ɚ/|a=US,CA}}
+`);
+      }
+
+      if (url.endsWith("/configured")) {
+        return jsonResponse([{ word: "configured", phonetics: [] }]);
+      }
+
+      if (url.endsWith("/configure")) {
+        return jsonResponse([{
+          word: "configure",
+          phonetic: "/kənˈfɪɡə(ɹ)/",
+          phonetics: [
+            { text: "/kənˈfɪɡə(ɹ)/", audio: "" },
+            { text: "/kənˈfɪɡ(j)ɚ/", audio: "" },
+          ],
+        }]);
+      }
+
+      return jsonResponse(null, false);
+    });
+
+    const result = await lookupBestPronunciation("configured", fetchMock as unknown as typeof fetch);
+
+    expect(result).toEqual({
+      ukPhonetic: "/kənˈfɪɡə(ɹ)/",
+      usPhonetic: "/kənˈfɪɡ(j)ɚ/",
+      ukAudioUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/LL-Q1860%20(eng)-Vealhurl-configure.wav",
+      usAudioUrl: undefined,
+    });
+  });
+
+  test("falls back to wiktionary audio when no IPA is available from dictionaryapi", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("action=raw&title=contextual")) {
+        return textResponse(`==English==
+
+===Pronunciation===
+* {{audio|en|LL-Q1860 (eng)-Wodencafe-contextual.wav|a=US}}
+`);
+      }
+
+      if (url.endsWith("/contextual")) {
+        return jsonResponse([{ word: "contextual", phonetics: [] }]);
+      }
+
+      return jsonResponse(null, false);
+    });
+
+    const result = await lookupBestPronunciation("contextual", fetchMock as unknown as typeof fetch);
+
+    expect(result).toEqual({
+      ukPhonetic: undefined,
+      usPhonetic: undefined,
+      ukAudioUrl: undefined,
+      usAudioUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/LL-Q1860%20(eng)-Wodencafe-contextual.wav",
     });
   });
 });
